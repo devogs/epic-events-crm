@@ -1,0 +1,315 @@
+{
+  "tables": [
+    {
+      "id": "-QmA4q1XS4HCrR6Hh68fu",
+      "name": "employees",
+      "x": -391,
+      "y": -326,
+      "locked": false,
+      "fields": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": true,
+          "comment": "",
+          "id": "Qq_KXku1VGYEXCrXL_mZs"
+        },
+        {
+          "id": "_BVz3y0v1B6QaP3XGUMsl",
+          "name": "full_name",
+          "type": "VARCHAR",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "",
+          "size": 255
+        },
+        {
+          "id": "OtU85eT39EWCHx-nYJi7K",
+          "name": "email",
+          "type": "VARCHAR",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": "",
+          "size": 255
+        },
+        {
+          "id": "AL8oE747JojGY0Sn0MG85",
+          "name": "phone",
+          "type": "VARCHAR",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "",
+          "size": 255
+        },
+        {
+          "id": "NtTkPbD1T_6D_Gwbkhgbd",
+          "name": "password",
+          "type": "VARCHAR",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "",
+          "size": 255
+        },
+        {
+          "id": "vNTabtaI_mbJcfGnYkGln",
+          "name": "department",
+          "type": "VARCHAR",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "sales, support, management",
+          "size": 255
+        }
+      ],
+      "comment": "",
+      "indices": [],
+      "color": "#175e7a"
+    },
+    {
+      "id": "w3W9X4JjL9R7Q0S7z8n8x",
+      "name": "clients",
+      "x": -100,
+      "y": 50,
+      "locked": false,
+      "fields": [
+        {
+          "id": "JbL8M6YkP4H0G2V3z9u8w",
+          "name": "id",
+          "type": "INTEGER",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": true
+        },
+        {
+          "id": "H4V2j1K9R0P3w5y8T1e2l",
+          "name": "full_name",
+          "type": "VARCHAR",
+          "notNull": true,
+          "size": 255
+        },
+        {
+          "id": "M7Z5v8N6B2X1c3q4r5t6y",
+          "name": "email",
+          "type": "VARCHAR",
+          "notNull": true,
+          "size": 255
+        },
+        {
+          "id": "D2E1f5g8H7J6k9L0m3n4o",
+          "name": "phone",
+          "type": "VARCHAR",
+          "size": 20
+        },
+        {
+          "id": "O0P9q8r7S6T5u4V3w2x1y",
+          "name": "company_name",
+          "type": "VARCHAR",
+          "size": 255
+        },
+        {
+          "id": "Q1W2e3R4t5Y6u7I8o9p0a",
+          "name": "creation_date",
+          "type": "DATE",
+          "notNull": true
+        },
+        {
+          "id": "S2D5f4g7H6j9K8L1m4n3v",
+          "name": "last_updated",
+          "type": "DATE",
+          "notNull": true
+        },
+        {
+          "id": "T4Y3u2I1o0P9a8S7d6f5g",
+          "name": "sales_contact_id",
+          "type": "INTEGER"
+        }
+      ],
+      "comment": "",
+      "indices": [],
+      "color": "#175e7a"
+    },
+    {
+      "id": "V8c7y2Z1w0X9o8I7k6j5s",
+      "name": "contracts",
+      "x": 200,
+      "y": -200,
+      "locked": false,
+      "fields": [
+        {
+          "id": "U3t1S5e8V2x4y7Z9w0r6q",
+          "name": "id",
+          "type": "INTEGER",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": true
+        },
+        {
+          "id": "P5y4W2q7G9j1K3h6L8z0s",
+          "name": "client_id",
+          "type": "INTEGER",
+          "notNull": true
+        },
+        {
+          "id": "K1J9h8G6f4D2s0A5z3X7v",
+          "name": "sales_contact_id",
+          "type": "INTEGER",
+          "notNull": true
+        },
+        {
+          "id": "A7z9X1c3V5b8N4m6L2k0j",
+          "name": "total_amount",
+          "type": "NUMERIC"
+        },
+        {
+          "id": "F5D4s7A9z1X3c6V2b8N0m",
+          "name": "amount_remaining",
+          "type": "NUMERIC"
+        },
+        {
+          "id": "H8J6k4L2m0N9p7Q5r3T1y",
+          "name": "creation_date",
+          "type": "DATE",
+          "notNull": true
+        },
+        {
+          "id": "E9T2u5y1I6o4P8a7S0d3f",
+          "name": "status_signed",
+          "type": "BOOLEAN",
+          "notNull": true
+        }
+      ],
+      "comment": "",
+      "indices": [],
+      "color": "#175e7a"
+    },
+    {
+      "id": "Z3y9W1x8V2u7S6t5R4q3p",
+      "name": "events",
+      "x": 400,
+      "y": 150,
+      "locked": false,
+      "fields": [
+        {
+          "id": "B8N5m2L0k9J7h4G1f3D6s",
+          "name": "id",
+          "type": "INTEGER",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": true
+        },
+        {
+          "id": "X1c3V5b8N4m6L2k0j9H7g",
+          "name": "contract_id",
+          "type": "INTEGER",
+          "notNull": true
+        },
+        {
+          "id": "O0P9q8r7S6T5u4V3w2x1y",
+          "name": "name",
+          "type": "VARCHAR",
+          "size": 255
+        },
+        {
+          "id": "A7z9X1c3V5b8N4m6L2k0j",
+          "name": "support_contact_id",
+          "type": "INTEGER"
+        },
+        {
+          "id": "M4N2b9V7c5X3z1A8s6D0f",
+          "name": "start_date",
+          "type": "TIMESTAMP",
+          "notNull": true
+        },
+        {
+          "id": "Q5R4t3Y2u1I0o9P8a7S6d",
+          "name": "end_date",
+          "type": "TIMESTAMP",
+          "notNull": true
+        },
+        {
+          "id": "T6Y8u0I2o4P6a8S1d3F5g",
+          "name": "location",
+          "type": "VARCHAR",
+          "size": 255
+        },
+        {
+          "id": "U1I0o9P8a7S6d5F4g3H2j",
+          "name": "attendees",
+          "type": "INTEGER"
+        },
+        {
+          "id": "W7e5R3t1Y9u8I6o4P2a0S",
+          "name": "notes",
+          "type": "TEXT"
+        }
+      ],
+      "comment": "",
+      "indices": [],
+      "color": "#175e7a"
+    }
+  ],
+  "relationships": [
+    {
+      "id": "clients_to_employees",
+      "startTable": "-QmA4q1XS4HCrR6Hh68fu",
+      "startField": "Qq_KXku1VGYEXCrXL_mZs",
+      "endTable": "w3W9X4JjL9R7Q0S7z8n8x",
+      "endField": "T4Y3u2I1o0P9a8S7d6f5g"
+    },
+    {
+      "id": "contracts_to_clients",
+      "startTable": "w3W9X4JjL9R7Q0S7z8n8x",
+      "startField": "JbL8M6YkP4H0G2V3z9u8w",
+      "endTable": "V8c7y2Z1w0X9o8I7k6j5s",
+      "endField": "P5y4W2q7G9j1K3h6L8z0s"
+    },
+    {
+      "id": "contracts_to_employees",
+      "startTable": "-QmA4q1XS4HCrR6Hh68fu",
+      "startField": "Qq_KXku1VGYEXCrXL_mZs",
+      "endTable": "V8c7y2Z1w0X9o8I7k6j5s",
+      "endField": "K1J9h8G6f4D2s0A5z3X7v"
+    },
+    {
+      "id": "events_to_contracts",
+      "startTable": "V8c7y2Z1w0X9o8I7k6j5s",
+      "startField": "U3t1S5e8V2x4y7Z9w0r6q",
+      "endTable": "Z3y9W1x8V2u7S6t5R4q3p",
+      "endField": "X1c3V5b8N4m6L2k0j9H7g"
+    },
+    {
+      "id": "events_to_employees",
+      "startTable": "-QmA4q1XS4HCrR6Hh68fu",
+      "startField": "Qq_KXku1VGYEXCrXL_mZs",
+      "endTable": "Z3y9W1x8V2u7S6t5R4q3p",
+      "endField": "A7z9X1c3V5b8N4m6L2k0j"
+    }
+  ]
+}
