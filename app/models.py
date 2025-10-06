@@ -17,30 +17,29 @@ from sqlalchemy import (
     Text,
     TIMESTAMP,
 )
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy.orm import relationship, sessionmaker, declarative_base
+from .authentication import hash_password, check_password
 
-# Load environment variables from the .env file
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), 'database', '.env'))
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', 'database', '.env'))
 
-# Retrieve database connection information
 POSTGRES_USER = os.environ.get("POSTGRES_USER")
 POSTGRES_PASSWORD = os.environ.get("POSTGRES_PASSWORD")
 POSTGRES_DB = os.environ.get("POSTGRES_DB")
 POSTGRES_ADDRESS = os.environ.get("POSTGRES_ADDRESS")
 
-# Verify that all necessary variables are defined
 if not all([POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, POSTGRES_ADDRESS]):
     raise ValueError(
-        "Database environment variables are not set."
+        "Database environment variables are not set. "
+        "Please check your .env file in the 'database' folder."
     )
 
-# Build the complete database connection URL
 DATABASE_URL = (
     f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_ADDRESS}:5432/{POSTGRES_DB}"
 )
 
 engine = create_engine(DATABASE_URL)
 Base = declarative_base()
+
 
 # --- Define the classes (models) ---
 
@@ -54,8 +53,18 @@ class Employee(Base):
     full_name = Column(String(255), nullable=False)
     email = Column(String(255), nullable=False, unique=True)
     phone = Column(String(255))
-    password = Column(String(255), nullable=False)
+    _password_hash = Column('password', String(255), nullable=False)
     department = Column(String(255), nullable=False)
+
+    @property
+    def password(self):
+        """ Getter for the password property. """
+        raise AttributeError('Password is not a readable attribute.')
+
+    @password.setter
+    def password(self, plain_password):
+        """ Setter for the password property to hash the password. """
+        self._password_hash = hash_password(plain_password)
 
     clients = relationship("Client", back_populates="sales_contact")
     contracts = relationship("Contract", back_populates="sales_contact")
@@ -77,7 +86,10 @@ class Client(Base):
     company_name = Column(String(255))
     creation_date = Column(Date, default=datetime.date.today, nullable=False)
     last_updated = Column(
-        Date, default=datetime.date.today, onupdate=datetime.date.today, nullable=False
+        Date,
+        default=datetime.date.today,
+        onupdate=datetime.date.today,
+        nullable=False,
     )
     sales_contact_id = Column(Integer, ForeignKey("employees.id"))
 
@@ -130,4 +142,5 @@ class Event(Base):
     def __repr__(self):
         return f"<Event(id={self.id}, name='{self.name}')>"
 
-Base.metadata.create_all(engine)
+
+# Base.metadata.create_all(engine)
