@@ -1,11 +1,12 @@
 """
-Management menu interface.
+Management menu interface (View layer).
 Handles routing for Employee CRUD operations.
 """
 import sys
 from rich.console import Console
 from rich.prompt import Prompt
-from app.controllers.employee_controller import (
+
+from .employee_views import (
     create_employee_cli,
     list_employees_cli,
     update_employee_cli,
@@ -16,10 +17,14 @@ console = Console()
 
 def display_management_menu(employee):
     """
-    Displays the menu options for the Management department using the required design.
+    Displays the menu options for the Management department.
+    All display text is in English, except for the department name.
     """
+    
+    department_name = employee.department 
+
     console.print("\n" + "="*50, style="bold magenta")
-    console.print(f"[bold magenta]MANAGEMENT DASHBOARD[/bold magenta] | User: [cyan]{employee.full_name}[/cyan] (ID: {employee.id})")
+    console.print(f"[bold magenta]MANAGEMENT DASHBOARD[/bold magenta] | User: [cyan]{employee.full_name}[/cyan] (ID: {employee.id}, Dept: [yellow]{department_name}[/yellow])")
     console.print("="*50, style="bold magenta")
     
     console.print("1. [green]Create[/green] a new employee")
@@ -44,24 +49,25 @@ def management_menu(employee, session):
         session (Session): The SQLAlchemy database session.
     
     Returns:
-        bool: True if the user chooses to quit the application (option 6),
-              False if the user returns to the main menu (option 5).
+        str: 'logout' if the user chooses to return to the main login menu,
+             or calls sys.exit(0) if the user quits the application.
     """
     while True:
         display_management_menu(employee)
         
-        choice = Prompt.ask("Select an option", choices=['1', '2', '3', '4', '5', '6'])
+        choice = Prompt.ask("Select an option [1/2/3/4/5/6]", choices=['1', '2', '3', '4', '5', '6'])
         
         if choice == '1':
-            create_employee_cli(session)
+            create_employee_cli(session, employee)
         elif choice == '2':
-            list_employees_cli(session)
+            list_employees_cli(session, employee)
         elif choice == '3':
-            update_employee_cli(session)
+            update_employee_cli(session, employee)
         elif choice == '4':
-            delete_employee_cli(session)
+            delete_employee_cli(session, employee)
         elif choice == '5':
-            return False 
+            console.print("[bold green]Logging out...[/bold green]")
+            return 'logout'
         elif choice == '6':
             console.print("[bold red]Quitting application...[/bold red]")
             sys.exit(0)
