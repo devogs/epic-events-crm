@@ -1,50 +1,61 @@
 """
-This module handles authentication and password hashing.
+Authentication and Authorization logic for the CRM application.
+Includes password hashing, checking, and permission verification.
+(COMPLETE ROLLBACK TO PURE BCRYPT FOR STABILITY)
 """
-import bcrypt
+import os
+import bcrypt 
+
+# --- Password Hashing and Checking ---
 
 def hash_password(password: str) -> str:
     """
-    Hashes the user's password.
-
-    Args:
-        password: The plain-text password.
-
-    Returns:
-        The salted and hashed password.
+    Hashes a plain text password using bcrypt.
+    Returns the hash as a string (decoded from bytes).
     """
-    salt = bcrypt.gensalt()
-    hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
-    return hashed_password.decode('utf-8')
+    hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+    return hashed.decode('utf-8')
 
 def check_password(password: str, hashed_password: str) -> bool:
     """
-    Checks if a plain-text password matches its hashed version.
-
-    Args:
-        password: The plain-text password.
-        hashed_password: The salted and hashed password stored in the database.
-
-    Returns:
-        True if the passwords match, False otherwise.
+    Checks a plain text password against a hashed password using bcrypt.
+    
+    Note: The hashed password in the database must be in bcrypt format (e.g., '$2b$').
     """
-    return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+    try:
+        return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except Exception:
+        return False
 
-def get_employee_permissions(department: str) -> list[str]:
+
+# --- Permission Logic ---
+
+# Define a map of permissions for each department (Keys must be in French as per user request)
+PERMISSIONS_MAP = {
+    "Gestion": [
+        "create_employee", "list_employees", "update_employee", "delete_employee",
+        "create_client", "list_clients", "update_client", "delete_client",
+        "create_contract", "list_contracts", "update_contract", "delete_contract",
+        "create_event", "list_events", "update_event", "delete_event",
+        "assign_support_contact" 
+    ],
+    "Commercial": [
+        "create_client", "list_clients", "update_client_own",
+        "list_contracts", "update_contract_own",
+        "create_event", "list_events",
+    ],
+    "Support": [
+        "list_clients", "list_contracts", "list_events", 
+        "list_events_own",
+        "update_event_own",
+    ]
+}
+
+def check_permission(employee, action: str) -> bool:
     """
-    Defines an employee's permissions based on their department.
-
-    Args:
-        department: The employee's department.
-
-    Returns:
-        A list of permissions.
+    Checks if an employee has the permission to perform a specific action.
     """
-    permissions = []
-    if department == 'commercial':
-        permissions = ['view_clients', 'create_client', 'update_client', 'view_contracts', 'create_contract', 'update_contract']
-    elif department == 'support':
-        permissions = ['view_events', 'update_event']
-    elif department == 'management':
-        permissions = ['view_clients', 'view_contracts', 'view_events', 'create_employee', 'update_employee']
-    return permissions
+    if employee.department not in PERMISSIONS_MAP:
+        return False
+    
+    return action in PERMISSIONS_MAP[employee.department]
