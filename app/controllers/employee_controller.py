@@ -1,11 +1,17 @@
 """
-Employee Controller: Handles all PURE BUSINESS LOGIC (CRUD operations) related to the Employee model.
-These functions are named for their purpose (e.g., create_employee) and DO NOT contain any CLI logic.
+Employee Controller: Handles all CRUD operations related to the Employee model.
+These functions are called by the department menus (like Management Menu).
 """
 import re
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from rich.console import Console
+from rich.prompt import Prompt, Confirm
+from rich.table import Table
 from app.models import Employee
+from app.authentication import hash_password
 
+
+console = Console()
 
 DEPARTMENT_OPTIONS = {
     '1': 'Gestion',
@@ -35,95 +41,164 @@ def format_email(full_name: str, session) -> str:
         base_email_prefix = f"{parts[0]}.{parts[-1]}"
     else:
         base_email_prefix = parts[0]
-
-    email_suffix = "@epicevents.com"
-    final_email_prefix = base_email_prefix
+        
+    base_email = f"{base_email_prefix}@epicevents.com"
     
-    counter = 1
-    while True:
-        email = f"{final_email_prefix}{email_suffix}"
-        
-        exists = session.query(Employee).filter_by(email=email).one_or_none()
-        
-        if not exists:
-            return email
-        
+    email_to_check = base_email
+    counter = 0
+    
+    while session.query(Employee).filter_by(email=email_to_check).first() is not None:
         counter += 1
-        final_email_prefix = f"{base_email_prefix}{counter}"
+        email_to_check = f"{base_email_prefix}{counter}@epicevents.com"
+        
+    return email_to_check
 
+# --- CRUD Functions ---
 
-# --- PURE CRUD Operations (No CLI/Rich objects here) ---
-
-def create_employee(session, full_name: str, phone: str, password: str, department: str) -> Employee:
+def create_employee(session, full_name: str, phone: str, department: str, plain_password: str) -> Employee | None:
     """
     Creates a new Employee record in the database.
-    This is the pure business logic function.
+
+    Args:
+        session: SQLAlchemy session.
+        full_name: Employee's full name.
+        phone: Employee's phone number.
+        department: Employee's department (Gestion, Commercial, Support).
+        plain_password: The unhashed password.
+
+    Returns:
+        The created Employee object, or None if creation failed.
     """
     try:
         email = format_email(full_name, session)
+        
+        hashed_password = hash_password(plain_password)
         
         new_employee = Employee(
             full_name=full_name,
             email=email,
             phone=phone,
-            department=department
+            department=department,
+            _password_hash=hashed_password
         )
-        new_employee.password = password
-
+        
         session.add(new_employee)
         session.commit()
         return new_employee
-
+        
     except IntegrityError:
         session.rollback()
-        raise ValueError("Database integrity error, possibly a duplicate email (should be prevented by format_email).")
-    except SQLAlchemyError as e:
+        console.print("[bold red]ERROR:[/bold red] Database integrity error. Employee creation failed.")
+        return None
+    except Exception as e:
         session.rollback()
-        raise Exception(f"Database error during creation: {e}")
+        console.print(f"[bold red]ERROR:[/bold red] An error occurred during employee creation: {e}")
+        return None
 
 
 def list_employees(session) -> list[Employee]:
     """
-    Retrieves all employees from the database.
+    Retrieves all Employee records.
+
+    Args:
+        session: SQLAlchemy session.
+
+    Returns:
+        A list of Employee objects.
     """
-    return session.query(Employee).all()
+    try:
+        employees = session.query(Employee).all()
+        return employees
+    except Exception as e:
+        console.print(f"[bold red]ERROR:[/bold red] An error occurred while listing employees: {e}")
+        return []
 
 
-def update_employee(session, employee_id: int, update_data: dict) -> Employee:
+def update_employee(session, employee_id: int, updates: dict) -> Employee | None:
     """
-    Updates an existing Employee's data based on the provided dictionary.
-    Raises ValueError if the employee is not found.
+    Updates an existing Employee record based on the provided dictionary of updates.
+
+    Args:
+        session: SQLAlchemy session.
+        employee_id: ID of the employee to update.
+        updates: Dictionary of fields to update (e.g., {'phone': '12345', 'department': 'Commercial', 'plain_password': 'new'}).
+
+    Returns:
+        The updated Employee object, or None if not found or update failed.
     """
     employee = session.query(Employee).filter_by(id=employee_id).one_or_none()
-
     if not employee:
-        raise ValueError(f"Employee with ID {employee_id} not found.")
+        return None
 
-    for key, value in update_data.items():
-        if hasattr(employee, key):
-            setattr(employee, key, value)
-    
     try:
+        if 'plain_password' in updates:
+            employee._password_hash = hash_password(updates.pop('plain_password'))
+        
+        if 'full_name' in updates and updates['full_name'] != employee.full_name:
+            employee.full_name = updates['full_name']
+            
+            if 'email' not in updates:
+                new_email = format_email(employee.full_name, session)
+                employee.email = new_email
+            
+        if 'email' in updates and updates['email'] != employee.email:
+            new_email = updates['email']
+            if session.query(Employee).filter(Employee.email == new_email, Employee.id != employee_id).first():
+                raise ValueError(f"Email '{new_email}' already exists for another employee.")
+            employee.email = new_email
+        
+        for key, value in updates.items():
+            if hasattr(employee, key):
+                setattr(employee, key, value)
+        
         session.commit()
         return employee
-    except SQLAlchemyError as e:
+        
+    except ValueError as e:
         session.rollback()
-        raise Exception(f"Database error during update: {e}")
+        console.print(f"[bold red]ERROR:[/bold red] Validation failed: {e}")
+        return None
+    except IntegrityError:
+        session.rollback()
+        console.print("[bold red]ERROR:[/bold red] Database integrity error. Check if the provided email/phone is already in use.")
+        return None
+    except Exception as e:
+        session.rollback()
+        console.print(f"[bold red]ERROR:[/bold red] An unexpected error occurred during employee update: {e}")
+        return None
 
 
-def delete_employee(session, employee_id: int) -> None:
+def delete_employee(session, employee_id: int) -> bool:
     """
-    Deletes an Employee record from the database.
-    Raises ValueError if the employee is not found.
+    Deletes an Employee record.
+
+    Args:
+        session: SQLAlchemy session.
+        employee_id: ID of the employee to delete.
+
+    Returns:
+        True if deletion was successful, False otherwise.
     """
     employee = session.query(Employee).filter_by(id=employee_id).one_or_none()
-
+    
     if not employee:
-        raise ValueError(f"Employee with ID {employee_id} not found.")
+        return False
         
     try:
+        if employee.department == 'Gestion':
+            gestion_count = session.query(Employee).filter_by(department='Gestion').count()
+            if gestion_count <= 1:
+                raise ValueError("Cannot delete the last remaining employee from the 'Gestion' department.")
+                
         session.delete(employee)
         session.commit()
+        return True
+    
+    except ValueError as e:
+        session.rollback()
+        console.print(f"[bold red]ERROR:[/bold red] {e}")
+        return False
     except SQLAlchemyError as e:
         session.rollback()
-        raise Exception(f"Database error during deletion: {e}")
+        console.print(f"[bold red]ERROR:[/bold red] Failed to delete employee. Details: {e}")
+        return False

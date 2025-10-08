@@ -1,199 +1,247 @@
 """
-Integration tests for the employee_controller module.
-These tests verify CRUD operations (Create, List, Update, Delete) 
-and permission checks for employees in the 'Gestion' department 
-using an in-memory SQLite database.
+Pytest tests for the employee_controller.py module.
+These tests use mock objects to simulate the database session and Employee model.
 """
-import sys
-import os
-
-# FIX: Add the project root directory (one level up from 'tests') to the Python path
-# This allows 'app' package imports to be resolved correctly during pytest execution.
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from app.models import Base, Employee
-from app.controllers.employee_controller import (
-    create_employee, 
-    list_employees, 
-    update_employee, 
-    delete_employee,
-    check_permission
-)
-from app.authentication import check_password # Required for password update check
+from unittest.mock import MagicMock, patch
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from app.controllers.employee_controller import create_employee, list_employees, update_employee, delete_employee
+from app.models import Employee # Used for mock object structure
 
-# --- Fixtures for Testing Environment ---
+# --- Mock Fixtures ---
 
-@pytest.fixture(scope="module")
-def db_engine():
-    """
-    Creates an in-memory SQLite engine for the entire module test session.
-    """
-    # Using ':memory:' ensures a temporary and clean database.
-    engine = create_engine('sqlite:///:memory:', connect_args={"check_same_thread": False})
-    # Creates all tables defined in Base
-    Base.metadata.create_all(engine)
-    yield engine
-    # Cleans up metadata after tests
-    Base.metadata.drop_all(engine)
+class MockEmployee:
+    """A minimal mock class to simulate the SQLAlchemy Employee model object."""
+    def __init__(self, id, full_name, email, department, phone=None, _password_hash='hashed_password'):
+        self.id = id
+        self.full_name = full_name
+        self.email = email
+        self.department = department
+        self.phone = phone
+        self._password_hash = _password_hash
 
-@pytest.fixture(scope="function")
-def session(db_engine):
-    """
-    Creates a new database session for each test function.
-    Uses a rollback at the end to isolate each test.
-    """
-    connection = db_engine.connect()
-    # Starts a transaction that will be rolled back after the test
-    transaction = connection.begin()
-    
-    Session = sessionmaker(bind=connection)
-    session = Session()
-    
-    yield session
-    
-    session.close()
-    transaction.rollback()
-    connection.close()
+    def __repr__(self):
+        return f"<Employee(id={self.id}, name='{self.full_name}')>"
 
 @pytest.fixture
-def management_employee(session: Session) -> Employee:
-    """
-    Fixture for a 'Gestion' department employee who executes the actions.
-    """
-    emp = Employee(
-        full_name="Manager John", 
-        email="manager@epic.com", 
-        phone="111-222-3333", 
-        department="Gestion"
+def mock_employee():
+    """Returns a mock Employee object."""
+    return MockEmployee(
+        id=99,
+        full_name='Test User',
+        email='test.user@epicevents.com',
+        department='Commercial',
+        phone='0123456789'
     )
-    # The model hashes the password automatically
-    emp.password = "passGesti0n" 
-    session.add(emp)
-    session.commit()
-    return emp
 
-# --- CRUD Tests for the 'Gestion' department ---
+@pytest.fixture
+def mock_gestion_employee():
+    """Returns a mock Employee object belonging to Gestion department."""
+    return MockEmployee(
+        id=1,
+        full_name='Admin User',
+        email='admin.user@epicevents.com',
+        department='Gestion'
+    )
 
-def test_01_management_can_create_employee(session: Session, management_employee: Employee):
+@pytest.fixture
+def mock_session():
     """
-    Verifies that a 'Gestion' user can create a new employee.
-    (Permission: 'create_employee')
+    Returns a mock SQLAlchemy session.
+    The query chain is mocked for filtering and fetching data.
     """
-    # 1. Permission Check
-    assert check_permission(management_employee, 'create_employee') is True
+    session = MagicMock()
+    session.query.return_value.filter_by.return_value.one_or_none.return_value = None
+    session.query.return_value.filter.return_value.first.return_value = None
+    return session
 
-    # 2. Data for the new Commercial employee
-    data = {
-        'full_name': "Commercial Jane",
-        'email': "jane.com@epic.com",
-        'phone': "222-333-4444",
-        'department': "Commercial",
-        'password': "passCom"
+# --- Utility Setup Functions ---
+
+def setup_update_mocks(mock_session, mock_employee):
+    """
+    Configures the mock session to return a specific employee for an update/delete operation.
+    It simulates session.query(Employee).filter_by(id=employee_id).one_or_none() finding the employee.
+    """
+    mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = mock_employee
+    return mock_employee
+
+
+# --- Test Cases for CREATE ---
+
+@patch('app.controllers.employee_controller.hash_password', return_value='new_hashed_password')
+@patch('app.controllers.employee_controller.format_email', return_value='new.employee@epicevents.com') 
+def test_create_employee_success(mock_format_email, mock_hash_password, mock_session):
+    """Test successful employee creation."""
+    employee = create_employee(mock_session, 'New Employee', '000', 'Commercial', 'pass')
+
+    assert employee is not None
+    assert employee.full_name == 'New Employee'
+    assert employee.email == 'new.employee@epicevents.com'
+    assert employee._password_hash == 'new_hashed_password'
+    mock_session.add.assert_called_once()
+    mock_session.commit.assert_called_once()
+    mock_session.rollback.assert_not_called()
+
+@patch('app.controllers.employee_controller.hash_password')
+@patch('app.controllers.employee_controller.format_email', return_value='safe.email@epicevents.com')
+def test_create_employee_integrity_error(mock_format_email, mock_hash_password, mock_session):
+    """Test failure when DB raises IntegrityError (e.g., duplicate phone/email constraint failure)."""
+    mock_session.commit.side_effect = IntegrityError("msg", "params", "orig")
+    
+    employee = create_employee(mock_session, 'Duplicate User', '111', 'Support', 'pass')
+
+    assert employee is None
+    mock_session.rollback.assert_called_once()
+
+
+# --- Test Cases for LIST ---
+
+def test_list_employees_success(mock_session, mock_employee):
+    """Test successful listing of employees."""
+    mock_session.query.return_value.all.return_value = [mock_employee]
+
+    employees = list_employees(mock_session)
+
+    assert len(employees) == 1
+    assert employees[0].full_name == 'Test User'
+
+
+# --- Test Cases for UPDATE ---
+
+@patch('app.controllers.employee_controller.hash_password', return_value='new_hashed_pass')
+def test_update_employee_success(mock_hash_password, mock_session, mock_employee):
+    """Test successful update of multiple fields (phone, department, name, email)."""
+    
+    employee = setup_update_mocks(mock_session, mock_employee)
+    
+    mock_session.query.return_value.filter.return_value.first.return_value = None 
+    
+    updates = {
+        'full_name': 'New Full Name',
+        'email': 'new.email.manual@epicevents.com',
+        'phone': '9876543210', 
+        'department': 'Support', 
+        'plain_password': 'new_pass'
     }
-    
-    # 3. Execution of Creation
-    new_employee = create_employee(session, data)
 
-    # 4. Verification
-    assert new_employee is not None
-    assert new_employee.department == "Commercial"
-    
-    # Verifies there are now 2 employees (Management + Commercial)
-    assert len(list_employees(session)) == 2
+    updated_employee = update_employee(mock_session, 99, updates)
 
-def test_02_management_can_list_all_employees(session: Session, management_employee: Employee):
-    """
-    Verifies that a 'Gestion' user can list all employees.
-    """
-    # Creates two additional employees
-    create_employee(session, {'full_name': "Com User", 'email': "com@epic.com", 'phone': "333", 'department': "Commercial", 'password': "pass"})
-    create_employee(session, {'full_name': "Sup User", 'email': "sup@epic.com", 'phone': "444", 'department': "Support", 'password': "pass"})
-    
-    employees = list_employees(session)
-    
-    # Should find 3 employees: Manager John (fixture) + Com User + Sup User
-    assert len(employees) == 3
-    
-    # Verifies that departments are correctly stored
-    departments = {emp.department for emp in employees}
-    assert 'Gestion' in departments
-    assert 'Commercial' in departments
-    assert 'Support' in departments
-
-def test_03_management_can_update_another_employee(session: Session, management_employee: Employee):
-    """
-    Verifies that a 'Gestion' user can update another employee.
-    (Permission: 'update_employee')
-    """
-    # 1. Create the target employee to update
-    target_data = {'full_name': "Old Name", 'email': "old@epic.com", 'phone': "555", 'department': "Support", 'password': "passOld"}
-    target_employee = create_employee(session, target_data)
-    
-    # 2. Define the updates (change name and department)
-    update_data = {
-        'full_name': "New Name Updated",
-        'department': "Commercial",
-        'password': "newpass"
-    }
-    
-    # 3. Execution of the Update
-    updated_employee = update_employee(session, target_employee.id, update_data)
-    
-    # 4. Verification of the Update
     assert updated_employee is not None
-    assert updated_employee.full_name == "New Name Updated"
-    assert updated_employee.department == "Commercial"
-    
-    # Verifies that the password is correctly updated (check the hash)
-    db_employee = session.query(Employee).filter_by(id=target_employee.id).one()
-    # We must use the check_password function from authentication.py
-    assert check_password("newpass", db_employee._password_hash) is True
-    assert check_password("passOld", db_employee._password_hash) is False # Old password should no longer work
+    assert updated_employee.full_name == 'New Full Name'
+    assert updated_employee.email == 'new.email.manual@epicevents.com'
+    assert updated_employee.phone == '9876543210'
+    assert updated_employee.department == 'Support'
+    assert updated_employee._password_hash == 'new_hashed_pass'
+    mock_session.commit.assert_called_once()
+    mock_session.rollback.assert_not_called()
 
-def test_04_management_can_delete_another_employee(session: Session, management_employee: Employee):
-    """
-    Verifies that a 'Gestion' user can delete another employee.
-    (Permission: 'delete_employee')
-    """
-    # 1. Create the target employee to delete
-    target_data = {'full_name': "User To Delete", 'email': "delete@epic.com", 'phone': "666", 'department': "Support", 'password': "passDelete"}
-    target_employee = create_employee(session, target_data)
+def test_update_employee_regenerates_email_on_name_change(mock_session, mock_employee):
+    """Test that email is automatically regenerated if name changes but email is not provided."""
+    employee = setup_update_mocks(mock_session, mock_employee)
     
-    initial_count = len(list_employees(session))
-    
-    # 2. Execution of the Deletion
-    was_deleted = delete_employee(session, target_employee.id)
-    
-    # 3. Verification of the Deletion
-    assert was_deleted is True
-    final_count = len(list_employees(session))
-    
-    # The number of employees must have decreased by 1 (Manager John is still there)
-    assert final_count == initial_count - 1 
-    
-    # Verifies that the employee is truly gone from the database
-    deleted_employee_check = session.query(Employee).filter_by(id=target_employee.id).one_or_none()
-    assert deleted_employee_check is None
+    updates = {
+        'full_name': 'Regenerate Email User',
+        'phone': '111222333'
+    }
 
-def test_05_update_employee_duplicate_email_fails(session: Session, management_employee: Employee):
-    """
-    Verifies that updating an employee to an existing email fails.
-    """
-    # 1. Create two employees
-    emp1_data = {'full_name': "Emp1", 'email': "emp1@epic.com", 'phone': "111", 'department': "Commercial", 'password': "p1"}
-    emp2_data = {'full_name': "Emp2", 'email': "emp2@epic.com", 'phone': "222", 'department': "Support", 'password': "p2"}
-    emp1 = create_employee(session, emp1_data)
-    emp2 = create_employee(session, emp2_data) # Target ID for the update
+    with patch('app.controllers.employee_controller.format_email', return_value='regenerate.email@epicevents.com') as mock_format_email:
+        updated_employee = update_employee(mock_session, 99, updates)
+
+    assert updated_employee is not None
+    assert updated_employee.full_name == 'Regenerate Email User'
+    assert updated_employee.email == 'regenerate.email@epicevents.com'
+    mock_format_email.assert_called_once()
+    mock_session.commit.assert_called_once()
+
+def test_update_employee_not_found(mock_session):
+    """Test update failure when the employee ID does not exist."""
     
-    # 2. Attempt to update Emp2 with Emp1's email
-    update_data = {'email': "emp1@epic.com"}
+    mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = None
     
-    # Must raise a ValueError (handled from IntegrityError)
-    with pytest.raises(ValueError) as excinfo:
-        update_employee(session, emp2.id, update_data)
+    updates = {'phone': '123'}
+    updated_employee = update_employee(mock_session, 99, updates)
     
-    # This assertion must match the French error message produced by your controller
-    assert "L'e-mail existe déjà" in str(excinfo.value)
+    assert updated_employee is None
+    mock_session.rollback.assert_not_called()
+
+@patch('app.controllers.employee_controller.format_email', return_value='safe.email@epicevents.com') 
+def test_update_employee_invalid_department(mock_format_email, mock_session, mock_employee):
+    """Test update failure when an update causes an IntegrityError (e.g., invalid department in real DB)."""
+    employee = setup_update_mocks(mock_session, mock_employee)
+    
+    updates = {'department': 'Invalid Department', 'full_name': 'New Name'}
+    
+    mock_session.commit.side_effect = IntegrityError("msg", "params", "orig")
+    
+    updated_employee = update_employee(mock_session, 99, updates)
+    
+    assert updated_employee is None
+    mock_session.rollback.assert_called_once()
+
+
+def test_update_employee_duplicate_email(mock_session, mock_employee):
+    """Test update failure when the new email already belongs to another employee."""
+    employee = setup_update_mocks(mock_session, mock_employee)
+    
+    updates = {'email': 'existing.user@epicevents.com'}
+
+    mock_session.query.return_value.filter.return_value.first.return_value = MockEmployee(
+        id=100, full_name='Existing User', email='existing.user@epicevents.com', department='Commercial'
+    )
+    
+    updated_employee = update_employee(mock_session, 99, updates)
+    
+    assert updated_employee is None
+    mock_session.rollback.assert_called_once()
+
+
+# --- Test Cases for DELETE ---
+
+def test_delete_employee_success(mock_session, mock_employee):
+    """Test successful employee deletion (non-Gestion employee)."""
+    setup_update_mocks(mock_session, mock_employee)
+    
+    result = delete_employee(mock_session, 99)
+    
+    assert result is True
+    mock_session.delete.assert_called_once_with(mock_employee)
+    mock_session.commit.assert_called_once()
+    mock_session.rollback.assert_not_called()
+
+def test_delete_employee_not_found(mock_session):
+    """Test deletion failure when the employee ID does not exist."""
+    
+    mock_session.query.return_value.filter_by.return_value.one_or_none.return_value = None
+    
+    result = delete_employee(mock_session, 999)
+    
+    assert result is False
+    mock_session.delete.assert_not_called()
+    mock_session.commit.assert_not_called()
+    mock_session.rollback.assert_not_called()
+
+def test_delete_employee_last_gestion(mock_session, mock_gestion_employee):
+    """Test deletion failure when trying to delete the last 'Gestion' employee."""
+    setup_update_mocks(mock_session, mock_gestion_employee)
+    
+    mock_session.query.return_value.filter_by.return_value.count.return_value = 1 
+    
+    result = delete_employee(mock_session, 1)
+    
+    assert result is False
+    mock_session.delete.assert_not_called()
+    mock_session.commit.assert_not_called()
+    mock_session.rollback.assert_called_once()
+
+def test_delete_employee_multiple_gestion(mock_session, mock_gestion_employee):
+    """Test successful deletion when there are multiple 'Gestion' employees."""
+    setup_update_mocks(mock_session, mock_gestion_employee)
+    
+    mock_session.query.return_value.filter_by.return_value.count.return_value = 2
+    
+    result = delete_employee(mock_session, 1)
+    
+    assert result is True
+    mock_session.delete.assert_called_once_with(mock_gestion_employee)
+    mock_session.commit.assert_called_once()
+    mock_session.rollback.assert_not_called()
