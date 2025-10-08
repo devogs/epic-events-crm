@@ -16,7 +16,7 @@ from app.controllers.employee_controller import (
 )
 
 from app.authentication import check_permission
-from app.models import Employee
+from app.models import Employee # Assurez-vous que l'importation de Employee est correcte
 
 console = Console()
 
@@ -40,29 +40,31 @@ def create_employee_cli(session, current_user: Employee) -> None:
     
     while True:
         console.print("\n[bold yellow]Select Department:[/bold yellow]")
-        options_list = [f"  {key}: {value}" for key, value in DEPARTMENT_OPTIONS.items()]
-        console.print("\n".join(options_list))
+        for key, value in DEPARTMENT_OPTIONS.items():
+            console.print(f"  {key}. {value}")
+            
+        department_choice = Prompt.ask("Select option [1/2/3]", choices=list(DEPARTMENT_OPTIONS.keys())).strip()
+        department = DEPARTMENT_OPTIONS.get(department_choice)
         
-        choice = Prompt.ask("Enter the number", choices=DEPARTMENT_OPTIONS.keys())
-        department = DEPARTMENT_OPTIONS[choice]
-        break
+        if department:
+            break
+        console.print("[bold red]Invalid choice. Please select 1, 2, or 3.[/bold red]")
 
     try:
-        employee = create_employee(
-            session,
-            full_name=full_name,
-            phone=phone,
-            department=department,
-            plain_password=plain_password
-        )
+        # Note: The email is generated automatically in employee_controller.create_employee 
+        # based on the full_name here.
+        new_employee = create_employee(session, full_name, phone, department, plain_password)
         
-        if employee:
-            console.print(f"\n[bold green]SUCCESS:[/bold green] Employee '{employee.full_name}' ({employee.department}) created with ID: {employee.id}. Email: [cyan]{employee.email}[/cyan]")
+        if new_employee:
+            console.print(f"\n[bold green]SUCCESS:[/bold green] Employee '{new_employee.full_name}' created!")
+            console.print(f"  - ID: {new_employee.id}")
+            console.print(f"  - Email: [cyan]{new_employee.email}[/cyan]")
+            console.print(f"  - Department: [yellow]{new_employee.department}[/yellow]")
         else:
-            console.print("\n[bold red]FAILURE:[/bold red] Employee creation failed.")
+            console.print("\n[bold red]FAILURE:[/bold red] Employee creation failed (check console for details).")
             
     except ValueError as e:
-        console.print(f"\n[bold red]VIEW ERROR:[/bold red] {e}")
+        console.print(f"\n[bold red]ERROR:[/bold red] {e}")
     except Exception as e:
         console.print(f"\n[bold red]FATAL ERROR:[/bold red] An unexpected error occurred: {e}")
 
@@ -70,36 +72,36 @@ def create_employee_cli(session, current_user: Employee) -> None:
 def list_employees_cli(session, current_user: Employee) -> None:
     """
     CLI interface to display the list of all employees.
-    Requires 'Gestion' permission.
+    Requires 'view_employees' permission (all departments have it).
     """
-    if not check_permission(current_user, 'list_employees'):
-        console.print("[bold red]Permission denied.[/bold red] Only the 'Gestion' department can list employees.")
+    if not check_permission(current_user, 'view_employees'):
+        console.print("[bold red]Permission denied.[/bold red] You do not have permission to view employees.")
         return
 
-    console.print("\n[bold blue]----- LIST OF EMPLOYEES ----- [/bold blue]")
-    
     employees = list_employees(session)
-
+    
     if not employees:
-        console.print("[yellow]No employee found.[/yellow]")
+        console.print("\n[yellow]No employees found in the database.[/yellow]")
         return
+        
+    console.print("\n[bold blue]----- EMPLOYEE LIST ----- [/bold blue]")
 
-    table = Table(title="Epic Events Employees", show_header=True, header_style="bold blue")
-    table.add_column("ID", style="dim", width=4)
-    table.add_column("Full Name", min_width=20)
+    table = Table(title="Epic Events Employees", show_header=True, header_style="bold magenta")
+    table.add_column("ID", style="dim", width=5)
+    table.add_column("Full Name", style="cyan", min_width=20)
     table.add_column("Email", min_width=30)
     table.add_column("Phone", min_width=15)
-    table.add_column("Department", style="magenta", min_width=15)
-
+    table.add_column("Department", style="yellow", min_width=10)
+    
     for emp in employees:
         table.add_row(
             str(emp.id),
             emp.full_name,
             emp.email,
-            emp.phone if emp.phone else "N/A",
+            emp.phone,
             emp.department
         )
-
+        
     console.print(table)
 
 
@@ -107,7 +109,6 @@ def update_employee_cli(session, current_user: Employee) -> None:
     """
     CLI interface to gather data and call the pure controller function to update an employee.
     Requires 'Gestion' permission.
-    Now includes prompts for Full Name and Email.
     """
     if not check_permission(current_user, 'update_employee'):
         console.print("[bold red]Permission denied.[/bold red] Only the 'Gestion' department can update employees.")
@@ -116,59 +117,69 @@ def update_employee_cli(session, current_user: Employee) -> None:
     console.print("\n[bold yellow]----- UPDATE EMPLOYEE ----- [/bold yellow]")
 
     employee = None
+    employee_id = None
     while True:
         try:
-            employee_id = Prompt.ask("Enter the ID of the employee to update (or 'q' to cancel)").strip()
-            if employee_id.lower() == 'q':
+            employee_id_input = Prompt.ask("Enter the ID of the employee to update (or 'q' to cancel)").strip()
+            if employee_id_input.lower() == 'q':
                 return
             
-            employee_id = int(employee_id)
-            
-
+            employee_id = int(employee_id_input)
             employee = session.query(Employee).filter_by(id=employee_id).one_or_none()
-            if employee:
-                break
-            else:
+            
+            if not employee:
                 console.print(f"[bold red]Employee with ID {employee_id} not found.[/bold red]")
-                
+                continue
+            
+            break
         except ValueError:
             console.print("[bold red]Invalid ID format. Please enter a number.[/bold red]")
 
+
+    console.print(f"\n[bold green]Editing Employee:[/bold green] [cyan]{employee.full_name}[/cyan] (ID: {employee.id}, Dept: {employee.department})")
+
     updates = {}
     
-    new_full_name = Prompt.ask(f"New Full Name (Current: [cyan]{employee.full_name}[/cyan], Leave empty to keep current)").strip()
-    if new_full_name and new_full_name != employee.full_name:
+    # 1. Full Name
+    new_full_name = Prompt.ask(f"New Full Name (Current: {employee.full_name}) - Press Enter to skip").strip()
+    if new_full_name:
         updates['full_name'] = new_full_name
-
-    new_email = Prompt.ask(f"New Email (Current: [cyan]{employee.email}[/cyan], Leave empty to keep current)").strip()
-    if new_email and new_email != employee.email:
-        updates['email'] = new_email
         
-    new_phone = Prompt.ask(f"New Phone Number (Current: [cyan]{employee.phone if employee.phone else 'N/A'}[/cyan], Leave empty to keep current)").strip()
+    # 2. Email - RESTAURÉ
+    new_email = Prompt.ask(f"New Email (Current: {employee.email}) - Press Enter to skip").strip()
+    if new_email:
+        updates['email'] = new_email # L'email est inclus dans les updates
+        
+    # 3. Phone
+    new_phone = Prompt.ask(f"New Phone Number (Current: {employee.phone}) - Press Enter to skip").strip()
     if new_phone:
         updates['phone'] = new_phone
+        
+    # 4. Department
+    console.print("\n[bold yellow]Select New Department (Current: {}):[/bold yellow]".format(employee.department))
+    for key, value in DEPARTMENT_OPTIONS.items():
+        console.print(f"  {key}. {value}")
+    console.print("  [bold]Press Enter to skip[/bold]")
 
-    console.print("\n[bold yellow]New Department:[/bold yellow]")
-    options_list = [f"  {key}: {value}" for key, value in DEPARTMENT_OPTIONS.items()]
-    options_list.append("  0: Do not change")
-    console.print("\n".join(options_list))
-    console.print(f"Current Department: [cyan]{employee.department}[/cyan]")
+    department_choice = Prompt.ask("Select option [1/2/3/Enter]").strip()
+    new_department = DEPARTMENT_OPTIONS.get(department_choice)
+    if new_department and new_department != employee.department:
+        updates['department'] = new_department
+        
+    # 5. Password
+    new_password = Prompt.ask("New Password (Leave empty to keep current) - Enter to skip", password=True).strip()
+    if new_password:
+        updates['plain_password'] = new_password
     
-    dept_choice = Prompt.ask("Enter the number", choices=list(DEPARTMENT_OPTIONS.keys()) + ['0'], default='0')
-    if dept_choice != '0':
-        updates['department'] = DEPARTMENT_OPTIONS[dept_choice]
-
-    update_password_choice = Confirm.ask("Do you want to update the password?", default=False)
-    if update_password_choice:
-        new_password = Prompt.ask("New Password", password=True)
-        updates['plain_password'] = new_password 
-
+    # Check if there are any changes
     if not updates:
         console.print("[yellow]No changes detected. Operation cancelled.[/yellow]")
         return
 
     try:
-        updated_employee = update_employee(session, employee_id, updates)
+        # CORRECTION : Utilisation de **updates pour déstructurer le dictionnaire
+        # en arguments nommés (full_name=x, phone=y, email=z, etc.) requis par le contrôleur.
+        updated_employee = update_employee(session, employee_id, **updates) 
         
         if updated_employee:
             console.print(f"\n[bold green]SUCCESS:[/bold green] Employee '{updated_employee.full_name}' (ID: {updated_employee.id}) updated. New Email: [cyan]{updated_employee.email}[/cyan]")
@@ -176,30 +187,30 @@ def update_employee_cli(session, current_user: Employee) -> None:
             console.print(f"\n[bold red]FAILURE:[/bold red] Employee update failed (check console for details).")
             
     except ValueError as e:
-        console.print(f"\n[bold red]VIEW ERROR:[/bold red] {e}")
+        console.print(f"\n[bold red]ERROR:[/bold red] {e}")
     except Exception as e:
         console.print(f"\n[bold red]FATAL ERROR:[/bold red] An unexpected error occurred: {e}")
 
 
 def delete_employee_cli(session, current_user: Employee) -> None:
     """
-    CLI interface to handle employee deletion.
+    CLI interface to get employee ID and call the controller function to delete an employee.
     Requires 'Gestion' permission.
     """
     if not check_permission(current_user, 'delete_employee'):
         console.print("[bold red]Permission denied.[/bold red] Only the 'Gestion' department can delete employees.")
         return
-        
+
     console.print("\n[bold red]----- DELETE EMPLOYEE ----- [/bold red]")
 
-    employee = None
+    employee_id = None
     while True:
         try:
-            employee_id = Prompt.ask("Enter the ID of the employee to delete (or 'q' to cancel)").strip()
-            if employee_id.lower() == 'q':
+            employee_id_input = Prompt.ask("Enter the ID of the employee to delete (or 'q' to cancel)").strip()
+            if employee_id_input.lower() == 'q':
                 return
             
-            employee_id = int(employee_id)
+            employee_id = int(employee_id_input)
             break
         except ValueError:
             console.print("[bold red]Invalid ID format. Please enter a number.[/bold red]")
