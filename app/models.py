@@ -4,6 +4,7 @@ It uses SQLAlchemy to map Python classes to database tables.
 """
 import os
 import datetime
+import re
 from dotenv import load_dotenv
 from sqlalchemy import (
     create_engine,
@@ -43,19 +44,38 @@ Base = declarative_base()
 
 # --- Define the classes (models) ---
 
+class Role(Base):
+    """MODÈLE DE RÔLE : Model for the 'roles' table."""
+    __tablename__ = "roles"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(50), unique=True, nullable=False) 
+    
+    employees = relationship("Employee", back_populates="role")
+
+    def __repr__(self):
+        return f"<Role(id={self.id}, name='{self.name}')>"
+
 
 class Employee(Base):
-    """Model for the 'employees' table."""
+    """MODIFIÉ : Model for the 'employees' table."""
 
     __tablename__ = "employees"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    full_name = Column(String(255), nullable=False)
-    email = Column(String(255), nullable=False, unique=True)
-    phone = Column(String(255))
-    _password_hash = Column('password', String(255), nullable=False)
-    department = Column(String(255), nullable=False)
+    
+    role_id = Column(Integer, ForeignKey("roles.id"), nullable=False) 
+    
+    full_name = Column(String(100), nullable=False)
+    email = Column(String(100), unique=True, nullable=False)
+    phone = Column(String(20), unique=False, nullable=False)
+    _password_hash = Column("password", String(100), nullable=False)
 
+    role = relationship("Role", back_populates="employees") 
+
+    contracts = relationship("Contract", foreign_keys='Contract.sales_contact_id', back_populates="sales_contact")
+    events_supported = relationship("Event", foreign_keys='Event.support_contact_id', back_populates="support_contact")
+    
     @property
     def password(self):
         """ Getter for the password property. """
@@ -63,15 +83,16 @@ class Employee(Base):
 
     @password.setter
     def password(self, plain_password):
-        """ Setter for the password property to hash the password. """
+        """ Setter to hash the password before storing. """
         self._password_hash = hash_password(plain_password)
-
-    clients = relationship("Client", back_populates="sales_contact")
-    contracts = relationship("Contract", back_populates="sales_contact")
-    events_support = relationship("Event", back_populates="support_contact")
+        
+    @property
+    def department(self):
+        """ Allows accessing the role name via 'employee.department' for backward compatibility. """
+        return self.role.name if self.role else None
 
     def __repr__(self):
-        return f"<Employee(id={self.id}, name='{self.full_name}')>"
+        return f"<Employee(id={self.id}, full_name='{self.full_name}', role='{self.role.name if self.role else 'N/A'}')>"
 
 
 class Client(Base):
@@ -80,24 +101,19 @@ class Client(Base):
     __tablename__ = "clients"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    full_name = Column(String(255), nullable=False)
-    email = Column(String(255), nullable=False)
-    phone = Column(String(255))
-    company_name = Column(String(255))
+    full_name = Column(String(100), nullable=False)
+    email = Column(String(100), unique=True, nullable=False)
+    phone = Column(String(20), unique=True, nullable=False)
+    company_name = Column(String(100), nullable=False)
     creation_date = Column(Date, default=datetime.date.today, nullable=False)
-    last_updated = Column(
-        Date,
-        default=datetime.date.today,
-        onupdate=datetime.date.today,
-        nullable=False,
-    )
+    last_contact = Column(Date, default=datetime.date.today, nullable=False)
     sales_contact_id = Column(Integer, ForeignKey("employees.id"))
 
-    sales_contact = relationship("Employee", back_populates="clients")
+    sales_contact = relationship("Employee", foreign_keys=[sales_contact_id])
     contracts = relationship("Contract", back_populates="client")
 
     def __repr__(self):
-        return f"<Client(id={self.id}, name='{self.full_name}')>"
+        return f"<Client(id={self.id}, full_name='{self.full_name}', company='{self.company_name}')>"
 
 
 class Contract(Base):
@@ -114,7 +130,7 @@ class Contract(Base):
     status_signed = Column(Boolean, nullable=False, default=False)
 
     client = relationship("Client", back_populates="contracts")
-    sales_contact = relationship("Employee", back_populates="contracts")
+    sales_contact = relationship("Employee", foreign_keys=[sales_contact_id], back_populates="contracts")
     events = relationship("Event", back_populates="contract")
 
     def __repr__(self):
@@ -137,10 +153,7 @@ class Event(Base):
     notes = Column(Text)
 
     contract = relationship("Contract", back_populates="events")
-    support_contact = relationship("Employee", back_populates="events_support")
+    support_contact = relationship("Employee", foreign_keys=[support_contact_id], back_populates="events_supported")
 
     def __repr__(self):
-        return f"<Event(id={self.id}, name='{self.name}')>"
-
-
-# Base.metadata.create_all(engine)
+        return f"<Event(id={self.id}, name='{self.name}', location='{self.location}')>"

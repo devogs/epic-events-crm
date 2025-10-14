@@ -8,14 +8,11 @@ import datetime
 import time
 from dotenv import load_dotenv
 
-# Charger les variables d'environnement (pour la clé secrète JWT)
 load_dotenv()
 
-# Clé secrète utilisée pour signer le JWT. 
-# IMPORTANT: Elle doit être définie dans un fichier .env et être très complexe.
+
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your_strong_fallback_secret_key_if_env_is_missing_change_me!")
 ALGORITHM = "HS256"
-# Durée de vie du token (par exemple, 24 heures)
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 
 
 # --- Hashing et Vérification des Mots de Passe ---
@@ -30,8 +27,7 @@ def hash_password(password: str) -> str:
     Returns:
         The hashed password as a UTF-8 string.
     """
-    # bcrypt.gensalt() génère un nouveau sel à chaque fois
-    # Le sel est intégré au hachage pour des raisons de sécurité
+
     hashed_bytes = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
     return hashed_bytes.decode('utf-8')
 
@@ -44,88 +40,77 @@ def check_password(password: str, hashed_password: str) -> bool:
         hashed_password: The hashed password from the database.
 
     Returns:
-        True if the passwords match, False otherwise.
+        True if the password matches the hash, False otherwise.
     """
     try:
-        # bcrypt.checkpw gère automatiquement l'encodage/décodage nécessaire
         return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
-    except ValueError:
-        # Peut arriver si le hash est mal formé ou non-bcrypt
+    except Exception:
         return False
 
 # --- JWT Token Management ---
 
-def create_access_token(employee_id: int, employee_email: str, department: str) -> str:
+def create_access_token(employee_id: int, employee_email: str, employee_department: str) -> str:
     """
-    Creates a JSON Web Token (JWT) for the authenticated employee.
+    Creates a JWT access token containing employee information and expiration time.
 
     Args:
-        employee_id: The ID of the employee (subject of the token).
-        employee_email: The email of the employee.
-        department: The department of the employee (for permissions).
+        employee_id: The ID of the employee ('sub').
+        employee_email: The employee's email.
+        employee_department: The employee's department/role name.
 
     Returns:
-        The encoded JWT string.
+        The encoded JWT token string.
     """
-    # Définition de l'expiration du token
     expire = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    employee_id_str = str(employee_id) 
     
-    # Le payload contient les données de l'employé et l'heure d'expiration
     to_encode = {
-        "exp": expire,
-        "iat": datetime.datetime.now(datetime.timezone.utc),
-        "sub": str(employee_id),
-        "email": employee_email,
-        "department": department
+        "sub": employee_id_str,             # Subject (Employee ID)
+        "email": employee_email,            # Employee Email
+        "department": employee_department,  # Employee Role Name
+        "exp": expire                       # Expiration Time
     }
     
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-
-def decode_access_token(token: str) -> dict | None:
+def decode_access_token(token: str) -> dict:
     """
     Decodes and validates a JWT access token.
-
-    Args:
-        token: The encoded JWT string.
-
-    Returns:
-        The payload dictionary if valid, or None if validation fails.
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        
+        if payload and 'sub' in payload:
+            try:
+                payload['sub'] = int(payload['sub'])
+            except ValueError:
+                raise jwt.InvalidTokenError("Subject (sub) in token is not a valid integer.")
+                
         return payload
-    except jwt.ExpiredSignatureError:
-        # Le token a expiré
-        print("ERROR: Token has expired.")
-        return None
-    except jwt.InvalidTokenError:
-        # Le token est invalide (signature incorrecte, etc.)
-        print("ERROR: Invalid token.")
-        return None
+    except Exception as e:
+        raise e
 
-# --- Permission Management ---
+# --- Permissions (Basé sur le nom du Rôle) ---
 
-# Définition des permissions par département
 PERMISSIONS = {
     'Gestion': {
         'create_employee': True, 'view_employees': True, 'update_employee': True, 'delete_employee': True,
-        'create_client': True, 'view_clients': True, 'update_client': True, 
-        'create_contract': True, 'view_contracts': True, 'update_contract': True, 
-        'create_event': True, 'view_events': True, 'update_event': True,
+        'create_client': True, 'view_clients': True, 'update_client': True, 'delete_client': True,
+        'create_contract': True, 'view_contracts': True, 'update_contract': True, 'delete_contract': True,
+        'create_event': True, 'view_events': True, 'update_event': True, 'delete_event': True,
     },
     'Commercial': {
         'create_employee': False, 'view_employees': True, 'update_employee': False, 'delete_employee': False,
-        'create_client': True, 'view_clients': True, 'update_client': True, # Peut voir tous les clients, mais gérer seulement les siens
-        'create_contract': True, 'view_contracts': True, 'update_contract': True,
-        'create_event': False, 'view_events': True, 'update_event': False,
+        'create_client': True, 'view_clients': True, 'update_client': True, 
+        'create_contract': True, 'view_contracts': True, 'update_contract': True, 'delete_contract': False,
+        'create_event': True, 'view_events': True, 'update_event': False, 'delete_event': False,
     },
     'Support': {
         'create_employee': False, 'view_employees': True, 'update_employee': False, 'delete_employee': False,
-        'create_client': False, 'view_clients': True, 'update_client': False,
-        'create_contract': False, 'view_contracts': True, 'update_contract': False,
-        'create_event': False, 'view_events': True, 'update_event': True, # Peut mettre à jour les événements qui lui sont assignés
+        'create_client': False, 'view_clients': True, 'update_client': False, 'delete_client': False,
+        'create_contract': False, 'view_contracts': True, 'update_contract': False, 'delete_contract': False,
+        'create_event': False, 'view_events': True, 'update_event': True, 'delete_event': False, 
     }
 }
 
@@ -140,5 +125,6 @@ def check_permission(employee, action: str) -> bool:
     Returns:
         True if the employee has permission, False otherwise.
     """
-    department = employee.department
-    return PERMISSIONS.get(department, {}).get(action, False)
+    department_name = employee.department 
+    
+    return PERMISSIONS.get(department_name, {}).get(action, False)
