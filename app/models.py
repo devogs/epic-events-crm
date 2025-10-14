@@ -19,7 +19,14 @@ from sqlalchemy import (
     TIMESTAMP,
 )
 from sqlalchemy.orm import relationship, sessionmaker, declarative_base
+# IMPORTS CRITIQUES AJOUTÉS
+from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.exc import IntegrityError
+from rich.console import Console 
+
 from .authentication import hash_password, check_password
+
+console = Console()
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', 'database', '.env'))
 
@@ -86,6 +93,11 @@ class Employee(Base):
         """ Setter to hash the password before storing. """
         self._password_hash = hash_password(plain_password)
         
+    # CORRECTION CRITIQUE: Méthode de vérification de mot de passe manquante
+    def verify_password(self, password):
+        """ Checks the plain password against the stored hashed password. """
+        return check_password(password, self._password_hash)
+
     @property
     def department(self):
         """ Allows accessing the role name via 'employee.department' for backward compatibility. """
@@ -157,3 +169,50 @@ class Event(Base):
 
     def __repr__(self):
         return f"<Event(id={self.id}, name='{self.name}', location='{self.location}')>"
+
+# --- Initialization Logic ---
+
+# FONCTION CRITIQUE AJOUTÉE: Importée par main.py
+def initialize_roles(session):
+    """
+    Ensures the default roles (Gestion, Commercial, Support) exist in the database 
+    and creates a default admin user.
+    """
+    roles_to_create = ["Gestion", "Commercial", "Support"]
+    
+    # 1. Créer les rôles manquants
+    roles_created = 0
+    for role_name in roles_to_create:
+        if not session.query(Role).filter_by(name=role_name).first():
+            new_role = Role(name=role_name)
+            session.add(new_role)
+            roles_created += 1
+
+    if roles_created > 0:
+        console.print(f"[bold green]Roles created in database: {', '.join(roles_to_create)}.[/bold green]")
+    else:
+        console.print("[bold green]Roles verified in database.[/bold green]")
+
+    # 2. Assurez-vous qu'un utilisateur administrateur existe
+    try:
+        if not session.query(Employee).filter_by(email="admin@epicevents.com").first():
+            gestion_role = session.query(Role).filter_by(name="Gestion").one()
+            
+            admin = Employee(
+                full_name="Super Admin",
+                email="admin@epicevents.com",
+                phone="0000000000",
+                role_id=gestion_role.id,
+                password="admin" 
+            )
+            session.add(admin)
+            console.print("[bold green]Default Admin User (admin@epicevents.com/admin) created.[/bold green]")
+    except NoResultFound:
+        # Arrive si le rôle 'Gestion' n'a pas pu être créé (problème DB)
+        console.print("[bold red]Admin user could not be created: 'Gestion' role not found.[/bold red]")
+        pass 
+    except IntegrityError:
+        session.rollback()
+        pass
+    except Exception as e:
+        console.print(f"[bold red]Error during initial admin creation:[/bold red] {e}")
