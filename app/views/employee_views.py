@@ -16,7 +16,7 @@ from app.controllers.employee_controller import (
 )
 
 from app.authentication import check_permission
-from app.models import Employee # Assurez-vous que l'importation de Employee est correcte
+from app.models import Employee
 
 console = Console()
 
@@ -51,8 +51,6 @@ def create_employee_cli(session, current_user: Employee) -> None:
         console.print("[bold red]Invalid choice. Please select 1, 2, or 3.[/bold red]")
 
     try:
-        # Note: The email is generated automatically in employee_controller.create_employee 
-        # based on the full_name here.
         new_employee = create_employee(session, full_name, phone, department, plain_password)
         
         if new_employee:
@@ -91,7 +89,8 @@ def list_employees_cli(session, current_user: Employee) -> None:
     table.add_column("Full Name", style="cyan", min_width=20)
     table.add_column("Email", min_width=30)
     table.add_column("Phone", min_width=15)
-    table.add_column("Department", style="yellow", min_width=10)
+    # employee.department fonctionne grâce à la propriété ajoutée
+    table.add_column("Department", style="yellow", min_width=10) 
     
     for emp in employees:
         table.add_row(
@@ -140,22 +139,18 @@ def update_employee_cli(session, current_user: Employee) -> None:
 
     updates = {}
     
-    # 1. Full Name
     new_full_name = Prompt.ask(f"New Full Name (Current: {employee.full_name}) - Press Enter to skip").strip()
     if new_full_name:
         updates['full_name'] = new_full_name
         
-    # 2. Email - RESTAURÉ
     new_email = Prompt.ask(f"New Email (Current: {employee.email}) - Press Enter to skip").strip()
     if new_email:
-        updates['email'] = new_email # L'email est inclus dans les updates
+        updates['email'] = new_email 
         
-    # 3. Phone
     new_phone = Prompt.ask(f"New Phone Number (Current: {employee.phone}) - Press Enter to skip").strip()
     if new_phone:
         updates['phone'] = new_phone
         
-    # 4. Department
     console.print("\n[bold yellow]Select New Department (Current: {}):[/bold yellow]".format(employee.department))
     for key, value in DEPARTMENT_OPTIONS.items():
         console.print(f"  {key}. {value}")
@@ -166,19 +161,15 @@ def update_employee_cli(session, current_user: Employee) -> None:
     if new_department and new_department != employee.department:
         updates['department'] = new_department
         
-    # 5. Password
     new_password = Prompt.ask("New Password (Leave empty to keep current) - Enter to skip", password=True).strip()
     if new_password:
         updates['plain_password'] = new_password
     
-    # Check if there are any changes
     if not updates:
         console.print("[yellow]No changes detected. Operation cancelled.[/yellow]")
         return
 
     try:
-        # CORRECTION : Utilisation de **updates pour déstructurer le dictionnaire
-        # en arguments nommés (full_name=x, phone=y, email=z, etc.) requis par le contrôleur.
         updated_employee = update_employee(session, employee_id, **updates) 
         
         if updated_employee:

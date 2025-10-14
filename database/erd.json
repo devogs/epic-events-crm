@@ -3,8 +3,8 @@
     {
       "id": "-QmA4q1XS4HCrR6Hh68fu",
       "name": "employees",
-      "x": -391,
-      "y": -326,
+      "x": -804.1199999999998,
+      "y": -775.2212499999999,
       "locked": false,
       "fields": [
         {
@@ -73,8 +73,8 @@
         },
         {
           "id": "vNTabtaI_mbJcfGnYkGln",
-          "name": "department",
-          "type": "VARCHAR",
+          "name": "role_id",
+          "type": "INTEGER",
           "default": "",
           "check": "",
           "primary": false,
@@ -82,7 +82,8 @@
           "notNull": true,
           "increment": false,
           "comment": "sales, support, management",
-          "size": 255
+          "size": "",
+          "values": []
         }
       ],
       "comment": "",
@@ -90,63 +91,117 @@
       "color": "#175e7a"
     },
     {
-      "id": "w3W9X4JjL9R7Q0S7z8n8x",
+      "id": "MZ_G0C1haps5DRSCdhD42",
       "name": "clients",
-      "x": -100,
-      "y": 50,
+      "x": -755.8349999999999,
+      "y": -246.36374999999975,
       "locked": false,
       "fields": [
         {
-          "id": "JbL8M6YkP4H0G2V3z9u8w",
           "name": "id",
           "type": "INTEGER",
+          "default": "",
+          "check": "",
           "primary": true,
           "unique": true,
           "notNull": true,
-          "increment": true
+          "increment": true,
+          "comment": "",
+          "id": "-6KMWYIV3FtHKSeIv7hKX"
         },
         {
-          "id": "H4V2j1K9R0P3w5y8T1e2l",
+          "id": "_lvLnmmVcB6KccnyLIuUF",
           "name": "full_name",
           "type": "VARCHAR",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
           "notNull": true,
+          "increment": false,
+          "comment": "",
           "size": 255
         },
         {
-          "id": "M7Z5v8N6B2X1c3q4r5t6y",
+          "id": "McwtYy6ehefSCbdnLhhw5",
           "name": "email",
           "type": "VARCHAR",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
           "notNull": true,
+          "increment": false,
+          "comment": "",
           "size": 255
         },
         {
-          "id": "D2E1f5g8H7J6k9L0m3n4o",
+          "id": "QOAh3K9uAa4IS8s3TvhCJ",
           "name": "phone",
           "type": "VARCHAR",
-          "size": 20
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "",
+          "size": 255
         },
         {
-          "id": "O0P9q8r7S6T5u4V3w2x1y",
+          "id": "6SGMgYFYNLHOG4L_1g5bA",
           "name": "company_name",
           "type": "VARCHAR",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "",
           "size": 255
         },
         {
-          "id": "Q1W2e3R4t5Y6u7I8o9p0a",
+          "id": "O0_GD4fQWYYe9ATAkMvpy",
           "name": "creation_date",
           "type": "DATE",
-          "notNull": true
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "",
+          "size": "",
+          "values": []
         },
         {
-          "id": "S2D5f4g7H6j9K8L1m4n3v",
+          "id": "9ikTbgGKorDQqencGel4Z",
           "name": "last_updated",
           "type": "DATE",
-          "notNull": true
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "",
+          "size": "",
+          "values": []
         },
         {
-          "id": "T4Y3u2I1o0P9a8S7d6f5g",
+          "id": "JzYtte00qNX2WWpf5l6eZ",
           "name": "sales_contact_id",
-          "type": "INTEGER"
+          "type": "INTEGER",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "",
+          "size": "",
+          "values": []
         }
       ],
       "comment": "",
@@ -154,54 +209,103 @@
       "color": "#175e7a"
     },
     {
-      "id": "V8c7y2Z1w0X9o8I7k6j5s",
+      "id": "NVmtMpfr8rUeiM1QWW-xD",
       "name": "contracts",
-      "x": 200,
-      "y": -200,
+      "x": 559.2112500000002,
+      "y": -793.8800000000001,
       "locked": false,
       "fields": [
         {
-          "id": "U3t1S5e8V2x4y7Z9w0r6q",
           "name": "id",
           "type": "INTEGER",
+          "default": "",
+          "check": "",
           "primary": true,
           "unique": true,
           "notNull": true,
-          "increment": true
+          "increment": true,
+          "comment": "",
+          "id": "-yGuvjzEBt-ZTqdJFLnyf"
         },
         {
-          "id": "P5y4W2q7G9j1K3h6L8z0s",
+          "id": "2woFzGep9hgWkewk7SJK6",
           "name": "client_id",
           "type": "INTEGER",
-          "notNull": true
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "",
+          "size": "",
+          "values": []
         },
         {
-          "id": "K1J9h8G6f4D2s0A5z3X7v",
+          "id": "onRXAlJxTDgd1fRhNgQSB",
           "name": "sales_contact_id",
           "type": "INTEGER",
-          "notNull": true
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "",
+          "size": "",
+          "values": []
         },
         {
-          "id": "A7z9X1c3V5b8N4m6L2k0j",
+          "id": "L9GNYJG_O6iQ_3f6MR6f5",
           "name": "total_amount",
-          "type": "NUMERIC"
+          "type": "NUMERIC",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
         },
         {
-          "id": "F5D4s7A9z1X3c6V2b8N0m",
+          "id": "mNm8roPceze-iCzocqvy_",
           "name": "amount_remaining",
-          "type": "NUMERIC"
+          "type": "NUMERIC",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": ""
         },
         {
-          "id": "H8J6k4L2m0N9p7Q5r3T1y",
+          "id": "PvknE-O95rG0lMn-QiquQ",
           "name": "creation_date",
           "type": "DATE",
-          "notNull": true
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "",
+          "size": "",
+          "values": []
         },
         {
-          "id": "E9T2u5y1I6o4P8a7S0d3f",
+          "id": "FB4eeY9_HPVzV04-t4bdq",
           "name": "status_signed",
           "type": "BOOLEAN",
-          "notNull": true
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "",
+          "size": "",
+          "values": []
         }
       ],
       "comment": "",
@@ -209,107 +313,249 @@
       "color": "#175e7a"
     },
     {
-      "id": "Z3y9W1x8V2u7S6t5R4q3p",
+      "id": "9-fgaMxdiwwEid46_T3_U",
       "name": "events",
-      "x": 400,
-      "y": 150,
+      "x": 287.0000000000002,
+      "y": -159.51999999999998,
       "locked": false,
       "fields": [
         {
-          "id": "B8N5m2L0k9J7h4G1f3D6s",
+          "id": "9vsGx7IXQ_1CrLf_axui0",
+          "name": "name",
+          "type": "VARCHAR",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "",
+          "size": 255
+        },
+        {
           "name": "id",
           "type": "INTEGER",
+          "default": "",
+          "check": "",
           "primary": true,
           "unique": true,
           "notNull": true,
-          "increment": true
+          "increment": true,
+          "comment": "",
+          "id": "Znbh04M1xFBpvKM94jaAv"
         },
         {
-          "id": "X1c3V5b8N4m6L2k0j9H7g",
+          "id": "0jcYSPORVfRoSukz5Dek_",
           "name": "contract_id",
           "type": "INTEGER",
-          "notNull": true
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "",
+          "size": "",
+          "values": []
         },
         {
-          "id": "O0P9q8r7S6T5u4V3w2x1y",
-          "name": "name",
-          "type": "VARCHAR",
-          "size": 255
-        },
-        {
-          "id": "A7z9X1c3V5b8N4m6L2k0j",
+          "id": "qtQd9G5BAkgc3pxlTYeD5",
           "name": "support_contact_id",
-          "type": "INTEGER"
+          "type": "INTEGER",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "",
+          "size": "",
+          "values": []
         },
         {
-          "id": "M4N2b9V7c5X3z1A8s6D0f",
+          "id": "H-oLp3aqSjx48YNH0BdhU",
           "name": "start_date",
           "type": "TIMESTAMP",
-          "notNull": true
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "",
+          "size": "",
+          "values": []
         },
         {
-          "id": "Q5R4t3Y2u1I0o9P8a7S6d",
+          "id": "0AbVdBIq-DQSz4Sebb7yK",
           "name": "end_date",
           "type": "TIMESTAMP",
-          "notNull": true
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": true,
+          "increment": false,
+          "comment": "",
+          "size": "",
+          "values": []
         },
         {
-          "id": "T6Y8u0I2o4P6a8S1d3F5g",
+          "id": "El4WwfeR2FzYBAkcfQip_",
           "name": "location",
           "type": "VARCHAR",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "",
           "size": 255
         },
         {
-          "id": "U1I0o9P8a7S6d5F4g3H2j",
+          "id": "SdohA_DQH3aex56WMQ85g",
           "name": "attendees",
-          "type": "INTEGER"
+          "type": "INTEGER",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "",
+          "size": "",
+          "values": []
         },
         {
-          "id": "W7e5R3t1Y9u8I6o4P2a0S",
+          "id": "tejJGeB2FhKMgATjkEhP9",
           "name": "notes",
-          "type": "TEXT"
+          "type": "TEXT",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": false,
+          "notNull": false,
+          "increment": false,
+          "comment": "",
+          "size": "",
+          "values": []
         }
       ],
       "comment": "",
       "indices": [],
       "color": "#175e7a"
+    },
+    {
+      "id": "_Pt7syFOhjId_dpEllW0s",
+      "name": "roles",
+      "x": -430.38749999999976,
+      "y": -593.6125,
+      "locked": false,
+      "fields": [
+        {
+          "name": "id",
+          "type": "INTEGER",
+          "default": "",
+          "check": "",
+          "primary": true,
+          "unique": true,
+          "notNull": true,
+          "increment": true,
+          "comment": "",
+          "id": "mX9HVQlCsC4jmZOokPtF4"
+        },
+        {
+          "id": "_5kGjs2msZbziJ0TxQhUe",
+          "name": "name",
+          "type": "VARCHAR",
+          "default": "",
+          "check": "",
+          "primary": false,
+          "unique": true,
+          "notNull": true,
+          "increment": false,
+          "comment": "Gestion, Commercial, Support",
+          "size": 255
+        }
+      ],
+      "comment": "",
+      "indices": [],
+      "color": "#7a1717"
     }
   ],
   "relationships": [
     {
-      "id": "clients_to_employees",
-      "startTable": "-QmA4q1XS4HCrR6Hh68fu",
-      "startField": "Qq_KXku1VGYEXCrXL_mZs",
-      "endTable": "w3W9X4JjL9R7Q0S7z8n8x",
-      "endField": "T4Y3u2I1o0P9a8S7d6f5g"
+      "startTableId": "MZ_G0C1haps5DRSCdhD42",
+      "startFieldId": "JzYtte00qNX2WWpf5l6eZ",
+      "endTableId": "-QmA4q1XS4HCrR6Hh68fu",
+      "endFieldId": "Qq_KXku1VGYEXCrXL_mZs",
+      "cardinality": "many_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action",
+      "name": "fk_clients_sales_contact_id_employees",
+      "id": 0
     },
     {
-      "id": "contracts_to_clients",
-      "startTable": "w3W9X4JjL9R7Q0S7z8n8x",
-      "startField": "JbL8M6YkP4H0G2V3z9u8w",
-      "endTable": "V8c7y2Z1w0X9o8I7k6j5s",
-      "endField": "P5y4W2q7G9j1K3h6L8z0s"
+      "startTableId": "NVmtMpfr8rUeiM1QWW-xD",
+      "startFieldId": "2woFzGep9hgWkewk7SJK6",
+      "endTableId": "MZ_G0C1haps5DRSCdhD42",
+      "endFieldId": "-6KMWYIV3FtHKSeIv7hKX",
+      "cardinality": "many_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action",
+      "name": "fk_contracts_client_id_clients",
+      "id": 1
     },
     {
-      "id": "contracts_to_employees",
-      "startTable": "-QmA4q1XS4HCrR6Hh68fu",
-      "startField": "Qq_KXku1VGYEXCrXL_mZs",
-      "endTable": "V8c7y2Z1w0X9o8I7k6j5s",
-      "endField": "K1J9h8G6f4D2s0A5z3X7v"
+      "startTableId": "NVmtMpfr8rUeiM1QWW-xD",
+      "startFieldId": "onRXAlJxTDgd1fRhNgQSB",
+      "endTableId": "-QmA4q1XS4HCrR6Hh68fu",
+      "endFieldId": "Qq_KXku1VGYEXCrXL_mZs",
+      "cardinality": "many_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action",
+      "name": "fk_contracts_sales_contact_id_employees",
+      "id": 2
     },
     {
-      "id": "events_to_contracts",
-      "startTable": "V8c7y2Z1w0X9o8I7k6j5s",
-      "startField": "U3t1S5e8V2x4y7Z9w0r6q",
-      "endTable": "Z3y9W1x8V2u7S6t5R4q3p",
-      "endField": "X1c3V5b8N4m6L2k0j9H7g"
+      "startTableId": "9-fgaMxdiwwEid46_T3_U",
+      "startFieldId": "0jcYSPORVfRoSukz5Dek_",
+      "endTableId": "NVmtMpfr8rUeiM1QWW-xD",
+      "endFieldId": "-yGuvjzEBt-ZTqdJFLnyf",
+      "cardinality": "many_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action",
+      "name": "fk_events_contract_id_contracts",
+      "id": 3
     },
     {
-      "id": "events_to_employees",
-      "startTable": "-QmA4q1XS4HCrR6Hh68fu",
-      "startField": "Qq_KXku1VGYEXCrXL_mZs",
-      "endTable": "Z3y9W1x8V2u7S6t5R4q3p",
-      "endField": "A7z9X1c3V5b8N4m6L2k0j"
+      "startTableId": "9-fgaMxdiwwEid46_T3_U",
+      "startFieldId": "qtQd9G5BAkgc3pxlTYeD5",
+      "endTableId": "-QmA4q1XS4HCrR6Hh68fu",
+      "endFieldId": "Qq_KXku1VGYEXCrXL_mZs",
+      "cardinality": "many_to_one",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action",
+      "name": "fk_events_support_contact_id_employees",
+      "id": 4
+    },
+    {
+      "startTableId": "-QmA4q1XS4HCrR6Hh68fu",
+      "startFieldId": "vNTabtaI_mbJcfGnYkGln",
+      "endTableId": "_Pt7syFOhjId_dpEllW0s",
+      "endFieldId": "mX9HVQlCsC4jmZOokPtF4",
+      "cardinality": "one_to_many",
+      "updateConstraint": "No action",
+      "deleteConstraint": "No action",
+      "name": "fk_employees_role_id_roles",
+      "id": "kTyhRtnSK5dj-lHSOfiA3"
     }
-  ]
+  ],
+  "notes": [],
+  "subjectAreas": [],
+  "database": "postgresql",
+  "types": [],
+  "enums": [],
+  "title": "epic-events-crm"
 }
