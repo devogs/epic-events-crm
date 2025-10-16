@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from app.models import Employee # Pour le type hinting
 
 # Import des fonctions d'authentification
-from app.authentication import get_employee_from_token, create_access_token 
+# NOTE: Suppression de create_access_token car le refresh doit être géré par main.py
+from app.authentication import get_employee_from_token
 
 # Import des vues spécifiques
 from .client_views import (
@@ -35,7 +36,7 @@ def display_sales_menu(employee: Employee):
     """
     department_name = employee.department 
 
-    # Style demandé par l'utilisateur
+    # Style demandé par l'utilisateur (Intact)
     console.print("\n" + "="*50, style="bold yellow")
     console.print(f"[bold yellow]SALES DASHBOARD[/bold yellow] | User: [cyan]{employee.full_name}[/cyan] (ID: {employee.id}, Dept: [yellow]{department_name}[/yellow])")
     console.print("="*50, style="bold yellow")
@@ -60,23 +61,26 @@ def display_sales_menu(employee: Employee):
     
     console.print("="*50, style="bold yellow")
 
+# Signature de fonction correcte pour main.py
 def sales_menu(session: Session, employee: Employee, token: str) -> tuple[str, str | None]:
     """
     Main loop and router for the Sales department menu.
     """
     while True:
-        # 1. Vérification de l'expiration du jeton (sécurité)
-        if get_employee_from_token(token, session) is None:
-            console.print("\n[bold red]Session Expired.[/bold red] You have been logged out.")
-            return 'logout', token
-
-        # 2. Afficher le menu
+        
+        # 1. Afficher le menu
         display_sales_menu(employee)
         
-        # 3. Récupérer le choix (plage 1-9)
+        # 2. Récupérer le choix (plage 1-9)
         choice = Prompt.ask("Select an option [1-9]").strip()
+        
+        # FIX HOMOGÉNÉITÉ (JWT): Vérification APRES le choix (comme Support/Gestion)
+        if get_employee_from_token(token, session) is None:
+            console.print("\n[bold red]Session Expired.[/bold red] You have been logged out.")
+            # Retourne None pour le token car il est expiré
+            return 'logout', None 
 
-        # 4. ROUTAGE MIS À JOUR (1-9)
+        # 3. ROUTAGE MIS À JOUR (1-9)
         
         # --- CLIENTS ---
         if choice == '1':
@@ -87,22 +91,23 @@ def sales_menu(session: Session, employee: Employee, token: str) -> tuple[str, s
             update_client_cli(session, employee)
 
         # --- CONTRACTS ---
-        elif choice == '4': # Anciennement 5
+        elif choice == '4':
             list_contracts_cli(session, employee)
-        elif choice == '5': # Anciennement 6
+        elif choice == '5':
             update_contract_cli(session, employee)
 
         # --- EVENTS ---
-        elif choice == '6': # Anciennement 7
+        elif choice == '6':
             create_event_cli(session, employee)
-        elif choice == '7': # Anciennement 8
+        elif choice == '7':
             list_events_cli(session, employee)
 
         # --- SORTIE ---
-        elif choice == '8': # Anciennement 9 (Logout)
+        elif choice == '8':
             console.print("[bold green]Logging out...[/bold green]")
-            return 'logout', token
-        elif choice == '9': # Anciennement 10 (Quit)
+            # Retourne None car le jeton doit être effacé lors de la déconnexion
+            return 'logout', None 
+        elif choice == '9':
             console.print("[bold red]Quitting application...[/bold red]")
             sys.exit(0)
         
@@ -110,8 +115,7 @@ def sales_menu(session: Session, employee: Employee, token: str) -> tuple[str, s
         else:
              console.print("[bold red]Invalid choice. Please select an option from 1 to 9.[/bold red]")
 
-        # 5. Rafraîchissement du jeton après chaque action réussie ou échouée
-        # FIX CRITIQUE: Ajout de employee.department
-        new_token, expiration_display = create_access_token(employee.id, employee.department)
-        token = new_token
-        console.print(f"\nSession expires in: [bold yellow]{expiration_display}[/bold yellow] minutes")
+        # FIX RETOUR: Suppression de la logique de rafraîchissement explicite.
+        # La boucle principale de main.py est responsable de rafraîchir le jeton
+        # après l'exécution d'une action réussie ou échouée.
+        pass # La boucle continue, main.py s'occupe du refresh

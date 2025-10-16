@@ -73,22 +73,21 @@ def display_management_menu(employee: Employee):
 def management_menu(session: Session, employee: Employee, token: str) -> tuple[str, str | None]:
     """
     Main loop and router for the Management department menu.
-    Mis à jour pour gérer les choix 1 à 10.
     """
     while True:
-        # 1. Vérification de l'expiration du jeton (sécurité)
+        
+        # 1. Affichage du menu
+        display_management_menu(employee)
+        
+        # 2. Récupérer le choix
+        choice = Prompt.ask("Select an option [1-10]", choices=[str(i) for i in range(1, 11)]).strip()
+
+        # FIX CRITIQUE 2: Vérification JWT DANS LA BOUCLE APRÈS LE CHOIX (Homogène avec support_menu.py).
         if get_employee_from_token(token, session) is None:
             console.print("\n[bold red]Session Expired.[/bold red] You have been logged out.")
             return 'logout', None
-
-        # 2. Afficher le menu
-        display_management_menu(employee)
         
-        # 3. Récupérer le choix (plage 1-10)
-        choice = Prompt.ask("Select an option [1-10]", choices=[str(i) for i in range(1, 11)]).strip()
-
-        # 4. ROUTAGE MIS À JOUR (1-10)
-        
+        # 3. ROUTAGE
         # --- EMPLOYEE MANAGEMENT (1-4) ---
         if choice == '1':
             create_employee_cli(session, employee)
