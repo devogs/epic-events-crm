@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 import os
 import sys
 
-# Configuration pour les imports relatifs
+# Configuration pour les imports relatifs (assure que les modules sont trouvables)
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, '..'))
 if project_root not in sys.path:
@@ -19,18 +19,17 @@ if project_root not in sys.path:
 # Imports des Modèles et des outils DB
 from app.models import (
     Employee, 
-    DATABASE_URL, 
     Base, 
     engine, 
-    initialize_roles # Import critique pour l'initialisation de la base
+    initialize_roles
 )
-# Imports de l'Authentification (NOTE: create_access_token retourne maintenant token et expiration display)
+# Imports de l'Authentification 
 from app.authentication import check_password, create_access_token, get_employee_from_token
-# Imports des Vues (Menus)
+
+# Imports des Vues (Menus) - Assurez-vous que ces fichiers existent
 from app.views.management_menu import management_menu 
-# Les autres menus seront importés ici si/quand implémentés
-# from app.views.sales_menu import sales_menu 
-# from app.views.support_menu import support_menu 
+from app.views.sales_menu import sales_menu 
+from app.views.support_menu import support_menu 
 
 console = Console()
 
@@ -41,139 +40,134 @@ GLOBAL_JWT_TOKEN: str | None = None
 def get_session():
     """
     Crée et retourne une nouvelle session SQLAlchemy.
+    Chaque opération (login ou cycle de menu) doit utiliser une nouvelle session.
     """
     try:
-        # Utilise l'engine importé de models.py
         Session = sessionmaker(bind=engine)
         return Session()
     except Exception as e:
-        console.print(f"[bold red]Erreur de connexion à la base de données:[/bold red] {e}")
+        console.print(f"[bold red]ERREUR FATALE lors de la création de la session:[/bold red] {e}")
         sys.exit(1)
 
-def login() -> str | None:
-    """
-    Gère le processus de connexion de l'utilisateur et retourne un jeton JWT en cas de succès.
-    """
-    console.print("\n" + "="*50)
-    console.print("[bold cyan]EPIC EVENTS CRM LOGIN[/bold cyan]")
-    console.print("="*50)
 
-    email = Prompt.ask("Enter your email").strip().lower()
-    password = Prompt.ask("Enter your password", password=True)
-    
-    session = get_session()
-    
-    try:
-        # 1. Récupérer l'employé par email
-        employee = session.query(Employee).filter_by(email=email).one_or_none()
+def login_cli(session) -> Employee | None:
+    """
+    Gère l'interface de connexion, valide les identifiants et génère un token JWT.
+    """
+    global GLOBAL_JWT_TOKEN
+
+    console.print("\n" + "="*50, style="bold blue")
+    console.print("[bold blue]EPIC EVENTS CRM LOGIN[/bold blue]")
+    console.print("="*50, style="bold blue")
+
+    email = Prompt.ask("Enter your Email").strip()
+    password = Prompt.ask("Enter your Password", password=True).strip()
+
+    employee = session.query(Employee).filter_by(email=email).one_or_none()
+
+    if employee and employee._password and check_password(password, employee._password):
+        # Authentification réussie
+        # NOTE : create_access_token doit être corrigée pour accepter l'ID et le département
+        token, expiration_display = create_access_token(employee.id, employee.department)
+        GLOBAL_JWT_TOKEN = token
         
-        if employee and employee.verify_password(password):
-            # 2. Créer le jeton JWT (retourne le token ET l'affichage de l'expiration)
-            token, expire_display = create_access_token(
-                employee_id=employee.id,
-                employee_email=employee.email,
-                employee_department=employee.department
-            )
-            console.print(f"\n[bold green]Login successful![/bold green] Welcome, {employee.full_name}.")
-            
-            # CORRECTION COULEUR: Changement de [bold dim] en [bold yellow dim]
-            console.print(f"[bold yellow dim]JWT Token generated (Expires in {expire_display}):[/bold yellow dim] [dim]{token[:50]}...[/dim]")
-            
-            return token
-        else:
-            console.print("\n[bold red]Login failed.[/bold red] Invalid email or password.")
-            return None
-    except Exception as e:
-        console.print(f"[bold red]An error occurred during login:[/bold red] {e}")
-        return None
-    finally:
-        session.close()
-
-# --- MENU ROUTER ---
-
-def main_menu_router(logged_in_employee, session, token: str) -> str:
-    """
-    Aiguille l'employé vers le menu approprié en fonction de son département.
-    """
-    department_name = logged_in_employee.department 
-
-    if department_name == 'Gestion':
-        return management_menu(logged_in_employee, session, token) 
-    # elif department_name == 'Commercial':
-    #     return sales_menu(logged_in_employee, session, token)
-    # elif department_name == 'Support':
-    #     return support_menu(logged_in_employee, session, token)
-    elif department_name in ('Commercial', 'Support'):
-        # Espace réservé pour les menus non implémentés
-        console.print(f"\n[bold yellow]Menu for {department_name} is not yet implemented.[/yellow]")
-        return 'logout'
+        console.print(f"\n[bold green]Welcome {employee.full_name} ({employee.department})![/bold green]")
+        console.print(f"[bold dim]Session expires in: {expiration_display}[/bold dim]")
+        return employee
     else:
-        console.print("[bold red]Error: Unknown department or no menu implemented.[/bold red]")
-        return 'logout'
+        # Échec de l'authentification
+        console.print("[bold red]ERROR:[/bold red] Invalid email or password.")
+        return None
+
+
+def main_menu_router(employee: Employee, session, token: str) -> tuple[str, str | None]:
+    """
+    Aiguille l'utilisateur vers le menu approprié en fonction de son département.
+
+    Returns: 
+        tuple[str, str | None]: (action: 'stay' | 'logout' | 'quit', new_token: str | None)
+    """
+    
+    department = employee.department
+    
+    # NOTE: Assurez-vous que management_menu/sales_menu/support_menu ont tous la signature (session, employee, token)
+    if department == 'Gestion':
+        return management_menu(session, employee, token) 
+    elif department == 'Commercial':
+        return sales_menu(session, employee, token) 
+    elif department == 'Support':
+        return support_menu(session, employee, token) 
+    else:
+        console.print(f"[bold red]ERROR:[/bold red] Unknown department '{department}'. Logging out.")
+        return 'logout', None
 
 
 def main():
     """
-    Fonction principale de l'application CLI, gérant la boucle de connexion et l'état (JWT).
+    Point d'entrée principal de l'application.
     """
-    global GLOBAL_JWT_TOKEN
-    
-    # --- INITIALISATION DE LA BASE DE DONNÉES ---
-    session = get_session()
-    try:
-        console.print("\n--- Initializing Database Structure ---", style="bold")
-        # Créer toutes les tables si elles n'existent pas
-        Base.metadata.create_all(engine)
-        console.print("All tables created/verified.", style="green")
+    # CORRECTION CRITIQUE: Déclaration globale pour permettre l'écriture sur la variable GLOBAL_JWT_TOKEN
+    global GLOBAL_JWT_TOKEN 
 
-        # Initialiser les rôles par défaut et l'admin par défaut
-        initialize_roles(session)
-        
-        # Le commit est essentiel pour que initialize_roles soit permanent
-        session.commit() 
+    # 1. Préparation de la base de données
+    console.print("[bold cyan]--- Initializing Database Structure & Roles ---[/bold cyan]")
+    
+    init_session = get_session() 
+    
+    try:
+        initialize_roles(init_session, engine) 
     except Exception as e:
-        session.rollback()
-        console.print(f"[bold red]FATAL ERROR during DB initialization:[/bold red] {e}")
+        console.print(f"[bold red]ERREUR FATALE lors de l'initialisation de la DB:[/bold red] {e}")
         sys.exit(1)
     finally:
-        session.close()
-    
-    # --- BOUCLE PRINCIPALE ---
-    while True:
-        # 1. La tentative de connexion retourne un jeton JWT
-        token = login()
+        init_session.close() 
 
-        if token:
-            GLOBAL_JWT_TOKEN = token
+    # Boucle principale de l'application (Login/Menu Loop)
+    while True:
+        if GLOBAL_JWT_TOKEN is None:
+            # État déconnecté : Affichage de l'écran de connexion
+            login_session = get_session() 
+            logged_in_employee = login_cli(login_session)
+            login_session.close() 
             
+            if logged_in_employee is None:
+                # Échec de connexion : attendre l'entrée utilisateur pour réessayer
+                Prompt.ask("Press Enter to try logging in again...")
+        
+        else:
+            # État connecté : Gestion des menus
             session = get_session() 
+            action = 'stay' # Initialise l'action par défaut
             
-            try:
-                # 2. Utiliser le jeton pour charger et valider l'employé (vérification initiale)
-                logged_in_employee = get_employee_from_token(GLOBAL_JWT_TOKEN, session)
+            # try:
+            # 2. Recharger l'employé à partir du token (Vérification de validité)
+            logged_in_employee = get_employee_from_token(GLOBAL_JWT_TOKEN, session)
+            
+            if logged_in_employee:
+                # 3. Aiguiller vers le menu approprié
                 
-                if logged_in_employee:
-                    # 3. Aiguiller vers le menu approprié
-                    action = main_menu_router(logged_in_employee, session, GLOBAL_JWT_TOKEN)
-                else:
-                    # Jeton invalide ou employé supprimé (déjà logué dans get_employee_from_token)
-                    action = 'logout'
-            except Exception as e:
-                console.print(f"[bold red]An unexpected error occurred in the main loop:[/bold red] {e}")
+                # CORRECTION CRITIQUE: Décomposition du tuple de retour (action, nouveau_token)
+                action, new_token_from_menu = main_menu_router(logged_in_employee, session, GLOBAL_JWT_TOKEN)
+                
+                # Mise à jour du token global (peut être None si 'logout')
+                GLOBAL_JWT_TOKEN = new_token_from_menu 
+            else:
+                # Jeton invalide ou expiré (le message est déjà dans get_employee_from_token)
                 action = 'logout'
-            finally:
-                session.close() # Fermeture de la session
+            # except Exception as e:
+            #     # Si une erreur inattendue se produit dans le menu ou le routeur, se déconnecter
+            #     console.print(f"[bold red]An unexpected error occurred in the main loop:[/bold red] {e}")
+            #     action = 'logout'
+            # finally:
+            #     session.close() 
             
             # 4. Gérer l'action de sortie du menu
             if action == 'quit':
                 console.print("\n[bold yellow]Exiting the application.[/bold yellow]")
                 break
             elif action == 'logout':
-                GLOBAL_JWT_TOKEN = None # Effacer le jeton à la déconnexion
+                GLOBAL_JWT_TOKEN = None 
                 console.print("\n[bold blue]You have been logged out. Returning to login screen.[/bold blue]")
-        else:
-            # Si la connexion a échoué, attendre l'entrée utilisateur pour réessayer
-            Prompt.ask("Press Enter to try logging in again...")
 
 if __name__ == "__main__":
     main()

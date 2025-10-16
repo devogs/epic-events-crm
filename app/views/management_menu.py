@@ -5,6 +5,8 @@ Handles routing for Employee CRUD operations and includes JWT expiration check.
 import sys
 from rich.console import Console
 from rich.prompt import Prompt
+from sqlalchemy.orm import Session
+from app.models import Employee # Pour le type hinting
 
 # IMPORT CRITIQUE
 from app.authentication import get_employee_from_token 
@@ -18,7 +20,7 @@ from .employee_views import (
 
 console = Console()
 
-def display_management_menu(employee):
+def display_management_menu(employee: Employee):
     """
     Displays the menu options for the Management department.
     """
@@ -39,36 +41,29 @@ def display_management_menu(employee):
     console.print("5. [bold]Return[/bold] to Main Menu (Logout)")
     console.print("6. [bold red]Quit[/bold red] Application")
     
-    console.print("---------------------------------------")
+    console.print("--------------------------------------------------")
 
-
-# MODIFICATION CRITIQUE : Ajout de la vérification de l'expiration avant l'exécution du choix
-def management_menu(employee, session, token: str) -> str:
+def management_menu(session: Session, employee: Employee, token: str) -> tuple[str, str | None]:
     """
-    Main loop for the Management menu, including immediate JWT expiration check.
+    Main loop for the Management dashboard.
+    Returns the next action ('stay', 'logout') and the token.
     """
-    while True:
-        # --- 1. VÉRIFICATION DU TOKEN À CHAQUE ITÉRATION (BLOQUE L'AFFICHAGE DU MENU) ---
-        employee_is_valid = get_employee_from_token(token, session)
-        
-        if employee_is_valid is None:
-            # Déconnexion forcée AVANT toute interaction.
-            console.print("\n[bold red]Session Expired.[/bold red] You have been logged out.")
-            return 'logout' 
-        
+    action = 'stay' # Default action
+    
+    while action == 'stay':
+        # Assurez-vous que l'objet employee est bien dans la session
+        employee_is_valid = session.merge(employee)
         employee = employee_is_valid
-        # --------------------------------------------------------------------------------
-
+        
         display_management_menu(employee)
         
         choice = Prompt.ask("Select an option [1/2/3/4/5/6]", choices=['1', '2', '3', '4', '5', '6'])
         
-        # --- 2. VÉRIFICATION DE SÉCURITÉ JUSTE AVANT L'EXÉCUTION DU CHOIX (CORRECTION DU FLUX) ---
-        # Si le token a expiré entre l'affichage du menu et le choix, on bloque.
+        # --- VÉRIFICATION DE SÉCURITÉ JUSTE AVANT L'EXÉCUTION DU CHOIX ---
+        # Si le token a expiré, l'utilisateur est déconnecté.
         if get_employee_from_token(token, session) is None:
-            # On réaffiche le message d'expiration ici pour la clarté de l'utilisateur
             console.print("\n[bold red]Session Expired.[/bold red] You have been logged out.")
-            return 'logout' 
+            return 'logout', token
         # ----------------------------------------------------------------------------------------
 
         if choice == '1':
@@ -81,9 +76,12 @@ def management_menu(employee, session, token: str) -> str:
             delete_employee_cli(session, employee)
         elif choice == '5':
             console.print("[bold green]Logging out...[/bold green]")
-            return 'logout'
+            # Retourne l'action et le token
+            return 'logout', token 
         elif choice == '6':
             console.print("[bold red]Quitting application...[/bold red]")
             sys.exit(0)
         else:
             console.print("[bold red]Invalid choice. Please try again.[/bold red]")
+            
+    return 'stay', token

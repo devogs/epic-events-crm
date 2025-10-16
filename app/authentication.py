@@ -10,30 +10,27 @@ import time
 from dotenv import load_dotenv
 from typing import Union 
 from rich.console import Console 
+from sqlalchemy.orm import Session
+# Import local nécessaire pour la validation du token
+from app.models import Employee 
 
-# Charger les variables d'environnement (pour la clé secrète JWT)
+console = Console()
 load_dotenv()
 
-# Clé secrète utilisée pour signer le JWT. 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your_strong_fallback_secret_key_if_env_is_missing_change_me!")
 ALGORITHM = "HS256"
-# CORRECTION CRITIQUE 1: Rétablissement de la durée à 3 minutes
+# Durée du token (à ajuster selon vos besoins)
 ACCESS_TOKEN_EXPIRE_MINUTES = 3 
 
-
 # --- Hashing et Vérification des Mots de Passe ---
-
+# ... (hash_password et check_password, inchangés mais nécessaires)
 def hash_password(password: str) -> str:
-    """
-    Hashes a plain password using bcrypt.
-    """
+    """Hashes a plain password using bcrypt."""
     hashed_bytes = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
     return hashed_bytes.decode('utf-8')
 
 def check_password(password: str, hashed_password: str) -> bool:
-    """
-    Verifies a plain password against a hashed password.
-    """
+    """Verifies a plain password against a hashed password."""
     try:
         return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
     except Exception:
@@ -41,93 +38,71 @@ def check_password(password: str, hashed_password: str) -> bool:
 
 # --- JWT Token Management ---
 
-# MODIFICATION CRITIQUE 2: La fonction retourne le token ET l'information sur l'expiration
-def create_access_token(employee_id: int, employee_email: str, employee_department: str) -> tuple[str, str]:
+# CORRECTION CRITIQUE: Ajout du paramètre 'employee_department'
+def create_access_token(employee_id: int, employee_department: str) -> tuple[str, str]:
     """
-    Creates a JWT access token and returns it along with the expiration display string.
+    Crée un jeton d'accès JWT avec l'ID de l'employé et son département.
+    Retourne le token et une chaîne d'information sur l'expiration.
     """
-    # L'expiration est calculée en secondes
-    expire_delta = datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    expire = datetime.datetime.now(datetime.timezone.utc) + expire_delta
+    to_encode = {"sub": str(employee_id), "department": employee_department}
     
-    # CRITIQUE: Convertit employee_id en chaîne de caractères pour le champ 'sub'
-    employee_id_str = str(employee_id) 
-
-    to_encode = {
-        "sub": employee_id_str,
-        "email": employee_email,            
-        "department": employee_department,  
-        "exp": expire                       
-    }
+    expire = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    to_encode.update({"exp": expire})
     
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-    # NOUVEAU: Formatage du temps d'expiration pour l'affichage dans main.py
-    expire_display = f"{ACCESS_TOKEN_EXPIRE_MINUTES}m"
-    if ACCESS_TOKEN_EXPIRE_MINUTES >= 60 * 24:
-        expire_display = f"{ACCESS_TOKEN_EXPIRE_MINUTES // (60 * 24)}d"
-    elif ACCESS_TOKEN_EXPIRE_MINUTES >= 60:
-        expire_display = f"{ACCESS_TOKEN_EXPIRE_MINUTES // 60}h"
-
-    return encoded_jwt, expire_display
+    
+    expiration_display = f"{ACCESS_TOKEN_EXPIRE_MINUTES} minutes"
+    
+    return encoded_jwt, expiration_display
 
 
-# AJOUTÉ: Fonction pour décoder le token et vérifier l'expiration/signature
-def decode_access_token(token: str) -> dict:
+def decode_access_token(token: str) -> Union[dict, None]:
     """
-    Decodes and validates a JWT access token (expiration, signature).
+    Décode et valide le token JWT.
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        
-        # S'assurer que le 'sub' (ID) est un entier après décodage pour les requêtes DB
-        if payload and 'sub' in payload:
-            try:
-                # Reconvertit en entier pour l'utilisation dans les requêtes DB
-                payload['sub'] = int(payload['sub']) 
-            except ValueError:
-                raise jwt.InvalidTokenError("Subject (sub) in token is not a valid integer.")
-                
         return payload
-    except Exception as e:
-        # Laisse l'exception remonter pour être gérée par get_employee_from_token
-        raise e
+    except jwt.ExpiredSignatureError:
+        console.print("[bold red]Token validation error:[/bold red] Token expired.", style="dim")
+        return None
+    except jwt.InvalidTokenError as e:
+        console.print(f"[bold red]Token validation error (logout):[/bold red] {e}", style="dim")
+        return None
 
 
-# AJOUTÉ: Fonction pour valider le token et récupérer l'employé
-def get_employee_from_token(token: str, session) -> Union['Employee', None]:
+def get_employee_from_token(token: str, session: Session) -> Employee | None:
     """
-    Validates the token, checks expiration, and retrieves the corresponding Employee object.
+    Décode le token, valide l'existence de l'utilisateur dans la DB, et gère le rafraîchissement si nécessaire.
     """
-    # Import local de Employee pour briser la dépendance circulaire
-    try:
-        from app.models import Employee 
-    except ImportError:
+    payload = decode_access_token(token)
+    
+    if payload is None:
+        return None # Token invalide ou expiré
+        
+    employee_id = payload.get("sub")
+    
+    if employee_id is None:
+        console.print("[bold red]Token validation error:[/bold red] Missing employee ID in payload.", style="dim")
         return None
         
-    try:
-        console = Console()
-        # Le décodage vérifie l'expiration et la signature
-        payload = decode_access_token(token)
-        
-        employee_id = payload.get("sub")
-        
-        employee = session.query(Employee).filter_by(id=employee_id).one_or_none()
-        
-        if not employee:
-            console.print("[bold red]Token validation error:[/bold red] Employee linked to token not found.", style="dim")
-            return None
-            
-        return employee
-        
-    except Exception as e:
-        # Capture ExpiredSignatureError, InvalidSignatureError, etc.
-        Console().print(f"[bold red]Token validation error (logout):[/bold red] {e}", style="dim")
+    employee = session.query(Employee).filter_by(id=int(employee_id)).one_or_none()
+    
+    if employee is None:
+        console.print(f"[bold red]Token validation error:[/bold red] Employee ID {employee_id} not found in DB.", style="dim")
         return None
+
+    # Vérification que le département dans le token correspond au département dans la DB
+    if payload.get("department") != employee.department:
+        console.print("[bold red]Security Warning:[/bold red] Department mismatch between token and DB. Token rejected.", style="dim")
+        return None
+        
+    return employee
 
 
 # --- Permission System ---
-
+# ... (check_permission et PERMISSIONS, non modifiés mais nécessaires)
 PERMISSIONS = {
     'Gestion': {
         'create_employee': True, 'view_employees': True, 'update_employee': True, 'delete_employee': True,
@@ -139,7 +114,7 @@ PERMISSIONS = {
         'create_employee': False, 'view_employees': True, 'update_employee': False, 'delete_employee': False,
         'create_client': True, 'view_clients': True, 'update_client': True, 
         'create_contract': True, 'view_contracts': True, 'update_contract': True, 
-        'create_event': False, 'view_events': True, 'update_event': False, 
+        'create_event': True, 'view_events': True, 'update_event': False, 
     },
     'Support': {
         'create_employee': False, 'view_employees': True, 'update_employee': False, 'delete_employee': False,
@@ -151,7 +126,7 @@ PERMISSIONS = {
 
 def check_permission(employee, action: str) -> bool:
     """
-    Checks if an employee has permission to perform a specific action.
+    Vérifie si l'employé a la permission d'effectuer l'action donnée.
     """
-    role_name = employee.department 
-    return PERMISSIONS.get(role_name, {}).get(action, False)
+    department = employee.department
+    return PERMISSIONS.get(department, {}).get(action, False)
