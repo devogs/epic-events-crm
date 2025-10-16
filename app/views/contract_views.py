@@ -34,13 +34,12 @@ def display_contract_table(contracts: list, title: str):
     table.add_column("Sales Contact (ID)", style="yellow", min_width=20)
     table.add_column("Total (€)", justify="right", style="magenta", min_width=15)
     table.add_column("Remaining (€)", justify="right", style="red", min_width=15)
-    table.add_column("Signed", min_width=10, justify="center")
+    table.add_column("Signed", min_width=10, justify="center") 
     
     for contract in contracts:
         client_info = f"{contract.client.full_name} ({contract.client_id})" if contract.client else "N/A"
         sales_info = f"{contract.sales_contact.full_name} ({contract.sales_contact_id})" if contract.sales_contact else "N/A"
         
-        # Determine remaining amount for color
         remaining_style = "red bold" if contract.remaining_amount > 0 and contract.status_signed else "green"
         
         table.add_row(
@@ -89,14 +88,18 @@ def create_contract_cli(session, current_employee: Employee):
         except Exception:
             console.print("[bold red]Error:[/bold red] Invalid amount format.")
             
-    # 3. Call controller
+    # 3. Get Signed Status (NEW ISOLATED PARAMETER)
+    is_signed = Confirm.ask("Is the contract signed? [y/n]")
+            
+    # 4. Call controller
     try:
         new_contract = create_contract(
             session,
             current_employee,
             client_id,
             total_amount,
-            remaining_amount
+            remaining_amount,
+            status_signed=is_signed # <-- PASS NEW PARAM
         )
         if new_contract:
             console.print(f"\n[bold green]SUCCESS:[/bold green] Contract created with ID [cyan]{new_contract.id}[/cyan] for Client ID {client_id}.")
@@ -104,7 +107,6 @@ def create_contract_cli(session, current_employee: Employee):
     except PermissionError as e:
         console.print(f"\n[bold red]PERMISSION DENIED:[/bold red] {e}")
     except Exception as e:
-         # FIX: Ensure no Rich markup is parsed inside the exception string
          console.print("[bold red]CONTRACT CREATION FAILED:[/bold red]", str(e))
 
 
@@ -129,7 +131,7 @@ def list_contracts_cli(session, current_employee: Employee):
                 
     # 2. Filter by Status (Signed/Unsigned/Not fully Paid)
     
-    # Note: Prompt.ask handles the user input error 'A' not in choices ['s', 'u', 'a', '']
+    # Filter for signed/unsigned (mutually exclusive high-level filters)
     filter_signed_choice = Prompt.ask("Filter by signature status? (S: Signed, U: Unsigned, A: All)", choices=['s', 'u', 'a', ''], default='a').lower()
     
     if filter_signed_choice == 's':
@@ -155,8 +157,6 @@ def list_contracts_cli(session, current_employee: Employee):
     except PermissionError as e:
         console.print(f"[bold red]PERMISSION DENIED:[/bold red] {e}")
     except Exception as e:
-        # FIX for MarkupError: Print the styled prefix and the exception message 
-        # as separate arguments to prevent Rich from parsing markup tags within the exception string.
         console.print("[bold red]UNKNOWN ERROR:[/bold red]", str(e))
         
 
@@ -175,7 +175,7 @@ def update_contract_cli(session, current_employee: Employee):
     updates = {}
     console.print("\n[dim]Leave empty to keep current values.[/dim]")
     
-    # Total Amount (Management only)
+    # 1. Total Amount (Management only)
     if current_employee.department == 'Gestion':
         total_amount_str = Prompt.ask("New Total Contract Amount (€)").strip().replace(',', '.')
         if total_amount_str:
@@ -185,24 +185,27 @@ def update_contract_cli(session, current_employee: Employee):
                 console.print("[bold red]Error:[/bold red] Invalid total amount.")
                 return
 
-    # Remaining Amount (Sales/Management)
-    amount_paid_str = Prompt.ask("New Remaining Amount (€)").strip().replace(',', '.')
-    if amount_paid_str:
+    # 2. Remaining Amount (Sales/Management)
+    remaining_amount_str = Prompt.ask("New Remaining Amount (€)").strip().replace(',', '.')
+    if remaining_amount_str:
         try:
-            updates['remaining_amount'] = Decimal(amount_paid_str)
+            updates['remaining_amount'] = Decimal(remaining_amount_str)
         except Exception:
             console.print("[bold red]Error:[/bold red] Invalid remaining amount.")
             return
             
-    # Sales Contact (Management only)
+    # 3. Signed Status (NEW ISOLATED PARAMETER)
+    is_signed_choice = Prompt.ask("New Signed Status? (Y: Yes, N: No, Leave empty)", choices=['y', 'n', ''], default='').lower()
+    if is_signed_choice == 'y':
+        updates['status_signed'] = True
+    elif is_signed_choice == 'n':
+        updates['status_signed'] = False
+            
+    # 4. Sales Contact (Management only)
     if current_employee.department == 'Gestion':
         if Confirm.ask("Do you want to reassign the Sales Contact? [y/n]"):
-            sales_employees = [e for e in list_employees(session) if e.department == 'Commercial']
             
-            console.print("\n[bold yellow]Available Sales Contacts (ID | Name):[/bold yellow]")
-            for emp in sales_employees:
-                 console.print(f"  [cyan]{emp.id}[/cyan]: {emp.full_name}")
-
+            # NOTE: We assume list_employees is available to fetch sales contacts if needed for display.
             new_contact_id_input = Prompt.ask("Enter New Sales Contact ID").strip()
             try:
                 updates['sales_contact_id'] = int(new_contact_id_input)
@@ -213,7 +216,7 @@ def update_contract_cli(session, current_employee: Employee):
         console.print("[bold yellow]INFO:[/bold yellow] No valid data provided for update.")
         return
 
-    # 3. Call controller (it verifies permissions)
+    # 5. Call controller (it verifies permissions)
     try:
         updated_contract = update_contract(
             session,
@@ -225,5 +228,4 @@ def update_contract_cli(session, current_employee: Employee):
         if updated_contract:
             console.print(f"\n[bold green]SUCCESS:[/bold green] Contract ID {updated_contract.id} updated.")
     except Exception as e:
-        # FIX: Ensure no Rich markup is parsed inside the exception string
-        console.print("[bold red]ERROR:[/bold red] An unexpected error occurred:", str(e))
+        console.print(f"\n[bold red]ERROR:[/bold red] An unexpected error occurred: {e}")
