@@ -61,14 +61,9 @@ def create_client(session: Session, current_user: Employee, full_name: str, emai
         console.print(f"[bold red]FATAL ERROR:[/bold red] An unexpected error occurred during client creation: {e}")
         return None
 
-def list_clients(
-    session: Session, 
-    current_user: Employee, 
-    filter_by_sales_id: int | None = None  
-) -> list[Client]:
+def list_clients(session: Session, current_user: Employee, filter_by_sales_id: int | None = None) -> list[Client]:
     """
-    Retrieves a list of clients, optionally filtered by the sales contact ID.
-    Permissions: All departments can view clients, but Commercial only sees their own by default.
+    Retrieves a list of clients, respecting filtering and permissions.
     """
     if not check_permission(current_user, 'view_clients'):
         raise PermissionError("Permission denied to view clients.")
@@ -76,14 +71,13 @@ def list_clients(
     query = session.query(Client)
 
     if current_user.department == 'Commercial':
-        # Commercial : Seulement leurs clients
-        query = query.filter(Client.sales_contact_id == current_user.id)
-    elif current_user.department in ['Support', 'Gestion']:
-        # Support/Gestion : Filtre optionnel par commercial. Utiliser le nouvel argument.
         if filter_by_sales_id is not None:
             query = query.filter(Client.sales_contact_id == filter_by_sales_id)
-        # Sinon, Gestion et Support voient tous les clients
-    
+
+    elif current_user.department in ['Gestion', 'Support'] and filter_by_sales_id is not None:
+         query = query.filter(Client.sales_contact_id == filter_by_sales_id)
+
+
     return query.all()
 
 def update_client(session: Session, current_user: Employee, client_id: int, **kwargs) -> Client | None:
