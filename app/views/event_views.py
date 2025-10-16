@@ -7,36 +7,36 @@ from rich.prompt import Prompt, Confirm
 from rich.table import Table
 import datetime
 
-# Import local de check_permission pour respecter le principe de dépendance minimale
+# Import local dependencies
 from app.models import Employee, Contract, Event 
 from app.controllers.event_controller import (
     create_event,
     list_events,
     update_event,
 )
-from app.controllers.employee_controller import list_employees # Pour afficher la liste des supports lors de l'assignation
+from app.controllers.employee_controller import list_employees 
 
 console = Console()
 
 
-# --- Helpers de Validation des Dates ---
+# --- Date Validation Helpers ---
 
 def get_valid_date(prompt_text: str) -> datetime.datetime | None:
-    """Demande et valide une date au format YYYY-MM-DD HH:MM."""
+    """Prompts and validates a date in YYYY-MM-DD HH:MM format."""
     while True:
-        date_str = Prompt.ask(f"{prompt_text} (YYYY-MM-DD HH:MM ou 'q' pour annuler)").strip()
+        date_str = Prompt.ask(f"{prompt_text} (YYYY-MM-DD HH:MM or 'q' to cancel)").strip()
         if date_str.lower() == 'q' or not date_str:
             return None
         try:
-            # Essayer de parser le format complet
+            # Try to parse the full format
             return datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M")
         except ValueError:
-            console.print("[bold red]Erreur:[/bold red] Format de date/heure invalide. Utilisez YYYY-MM-DD HH:MM.")
+            console.print("[bold red]Error:[/bold red] Invalid date/time format. Use YYYY-MM-DD HH:MM.")
 
 def validate_dates_order(start: datetime.datetime, end: datetime.datetime) -> bool:
-    """Vérifie que la date de début est antérieure à la date de fin."""
+    """Checks that the start date is before the end date."""
     if start >= end:
-        console.print("[bold red]Erreur:[/bold red] La date de début doit être antérieure à la date de fin.")
+        console.print("[bold red]Error:[/bold red] Start date must be before end date.")
         return False
     return True
 
@@ -46,7 +46,7 @@ def validate_dates_order(start: datetime.datetime, end: datetime.datetime) -> bo
 def display_event_table(events: list, title: str):
     """Utility function to display events in a Rich Table."""
     if not events:
-        console.print(f"[bold yellow]INFO:[/bold yellow] Aucun événement trouvé pour l'affichage de '{title}'.")
+        console.print(f"[bold yellow]INFO:[/bold yellow] No events found for the '{title}' display.")
         return
 
     table = Table(title=title, show_header=True, header_style="bold cyan")
@@ -59,7 +59,9 @@ def display_event_table(events: list, title: str):
     table.add_column("Start Date", style="magenta", min_width=15)
     
     for event in events:
-        support_info = f"{event.support_contact.full_name} ({event.support_contact_id})" if event.support_contact else "NON ASSIGNÉ"
+        support_info = f"{event.support_contact.full_name} ({event.support_contact_id})" if event.support_contact else "UNASSIGNED"
+        
+        display_date = event.event_start.strftime("%Y-%m-%d %H:%M") if hasattr(event, 'event_start') else "N/A"
         
         table.add_row(
             str(event.id),
@@ -68,7 +70,7 @@ def display_event_table(events: list, title: str):
             support_info,
             str(event.attendees),
             event.location,
-            event.start_date.strftime("%Y-%m-%d %H:%M")
+            display_date 
         )
     console.print(table)
 
@@ -76,168 +78,193 @@ def display_event_table(events: list, title: str):
 # --- CLI Functions ---
 
 def create_event_cli(session, current_employee: Employee):
-    """CLI pour créer un événement (Réservé au Commercial pour un contrat signé)."""
-    console.print("\n[bold green]-- CRÉER UN NOUVEL ÉVÉNEMENT --[/bold green]")
+    """CLI to create an event (Reserved for Sales for a signed contract)."""
+    console.print("\n[bold green]-- CREATE NEW EVENT --[/bold green]")
     
-    # 1. Saisie de l'ID Contrat
+    # 1. Get Contract ID
     while True:
-        contract_id_str = Prompt.ask("Entrez l'ID du Contrat (doit être signé)").strip()
+        contract_id_str = Prompt.ask("Enter Contract ID (must be signed)").strip()
         try:
             contract_id = int(contract_id_str)
             break
         except ValueError:
-            console.print("[bold red]Erreur:[/bold red] L'ID doit être un nombre.")
+            console.print("[bold red]Error:[/bold red] ID must be a number.")
 
-    # 2. Collecte des détails
-    name = Prompt.ask("Nom de l'événement").strip()
-    location = Prompt.ask("Lieu de l'événement").strip()
+    # 2. Collect details
+    name = Prompt.ask("Event Name").strip()
+    location = Prompt.ask("Event Location").strip()
+    notes = Prompt.ask("Event Notes (description)").strip()
     
     while True:
         try:
-            attendees = int(Prompt.ask("Nombre de participants estimés").strip())
+            attendees = int(Prompt.ask("Estimated number of Attendees").strip())
             if attendees >= 0: break
-            console.print("[bold red]Erreur:[/bold red] Le nombre de participants ne peut être négatif.")
+            console.print("[bold red]Error:[/bold red] Number of attendees cannot be negative.")
         except ValueError:
-            console.print("[bold red]Erreur:[/bold red] Doit être un nombre entier.")
+            console.print("[bold red]Error:[/bold red] Must be an integer.")
 
-    # 3. Saisie et validation des dates
+    # 3. Get and validate dates
     while True:
-        start_date = get_valid_date("Date et heure de début")
-        if start_date is None: return # Annulation
-        end_date = get_valid_date("Date et heure de fin")
-        if end_date is None: return # Annulation
+        start_date = get_valid_date("Start Date and Time")
+        if start_date is None: return 
+        end_date = get_valid_date("End Date and Time")
+        if end_date is None: return 
         
         if validate_dates_order(start_date, end_date):
             break
 
-    # 4. Appel au contrôleur (il vérifie la permission et la signature du contrat)
-    new_event = create_event(
-        session,
-        current_employee,
-        contract_id,
-        name,
-        start_date,
-        end_date,
-        location,
-        attendees
-    )
+    # 4. Call controller
+    try:
+        new_event = create_event(
+            session,
+            current_employee,
+            contract_id,
+            name,
+            attendees,
+            start_date,
+            end_date,
+            location,
+            notes
+            # support_contact_id left as None by default
+        )
+        if new_event:
+            console.print(f"\n[bold green]SUCCESS:[/bold green] Event '{new_event.name}' created with ID [cyan]{new_event.id}[/cyan]. Support will be assigned by Management.")
 
-    if new_event:
-        console.print(f"\n[bold green]SUCCÈS:[/bold green] Événement '{new_event.name}' créé avec l'ID [cyan]{new_event.id}[/cyan]. Le support sera assigné par la Gestion.")
+    except Exception as e:
+         console.print(f"\n[bold red]EVENT CREATION FAILED:[/bold red] {e}")
 
 
 def list_events_cli(session, current_employee: Employee):
-    """CLI pour lister les événements avec options de filtrage (Exigence Commerciale)."""
-    console.print("\n[bold blue]-- LISTE DES ÉVÉNEMENTS --[/bold blue]")
+    """CLI to list events with filtering options."""
+    console.print("\n[bold blue]-- LIST EVENTS --[/bold blue]")
 
-    # Logique de filtrage Commerciale (seulement ceux dont le client est responsable)
-    # L'exigence commerciale était de créer un événement, pas de filtre particulier.
-    # On ajoute la logique standard de filtres pour la cohésion de l'app.
+    # Initialize filters
+    filter_support_id = None
     
-    choices = ['1', '2', '3']
+    # 1. Filter for unassigned events
+    filter_unassigned = Confirm.ask("Do you want to display ONLY unassigned events? [y/n]")
     
-    if current_employee.department == 'Gestion':
-         choice = Prompt.ask("Filtrer? [1: Tous | 2: Non assignés au support]", choices=choices[:-1], default='1')
-    elif current_employee.department == 'Support':
-         choice = Prompt.ask("Filtrer? [1: Tous | 2: Ceux qui me sont attribués]", choices=['1', '2'], default='1')
-    else: # Commercial
-        choice = Prompt.ask("Filtrer? [1: Tous | 2: Mes événements clients]", choices=['1', '2'], default='1')
+    # 2. Filter by Support contact
+    
+    if current_employee.department == 'Support':
+        # SUPPORT LOGIC: "Filter only events assigned to me"
+        if Confirm.ask("Do you want to display ONLY events assigned to you? [y/n]"):
+            # If 'yes', filter by the current employee's ID
+            filter_support_id = current_employee.id 
+            
+    elif current_employee.department == 'Gestion':
+        # MANAGEMENT LOGIC: Option to filter by any Support ID
+        if Confirm.ask("Do you want to filter by a specific support contact? [y/n]"):
+            support_id_input = Prompt.ask("Enter Support Contact ID").strip()
+            try:
+                filter_support_id = int(support_id_input)
+            except ValueError:
+                console.print("[bold red]Invalid Support ID, filter ignored.[/bold red]")
 
 
-    filter_by_support_id = None
-    filter_by_unassigned = None
-    filter_by_commercial_id = None
-    title = "TOUS LES ÉVÉNEMENTS"
-
-    if current_employee.department == 'Gestion' and choice == '2':
-        filter_by_unassigned = True
-        title = "ÉVÉNEMENTS NON ASSIGNÉS AU SUPPORT"
-    elif current_employee.department == 'Support' and choice == '2':
-        filter_by_support_id = current_employee.id
-        title = f"MES ÉVÉNEMENTS (Support ID: {current_employee.id})"
-    elif current_employee.department == 'Commercial' and choice == '2':
-        # Le contrôleur doit supporter le filtre par commercial (via le contrat)
-        filter_by_commercial_id = current_employee.id
-        title = f"ÉVÉNEMENTS DE MES CLIENTS (Commercial ID: {current_employee.id})"
+    # 3. Call controller with filters
+    try:
+        events = list_events(
+            session, 
+            current_employee,
+            filter_by_support_id=filter_support_id,
+            filter_unassigned=filter_unassigned 
+        )
+        display_event_table(events, "FILTERED EVENTS")
         
-    events = list_events(session, current_employee, filter_by_support_id=filter_by_support_id, filter_by_unassigned=filter_by_unassigned, filter_by_commercial_id=filter_by_commercial_id)
-
-    if events is not None:
-        display_event_table(events, title)
+    except PermissionError as e:
+        console.print(f"[bold red]PERMISSION DENIED:[/bold red] {e}")
+    except Exception as e:
+        console.print(f"[bold red]UNKNOWN ERROR:[/bold red] {e}")
 
 
 def update_event_cli(session, current_employee: Employee):
-    """CLI pour mettre à jour un événement existant."""
-    console.print("\n[bold yellow]-- MODIFIER UN ÉVÉNEMENT --[/bold yellow]")
-    
-    # 1. Saisie de l'ID
+    """CLI to update an event (Reserved for Management for assignment and Support for details)."""
+    console.print("\n[bold yellow]-- UPDATE EVENT --[/bold yellow]")
+
     while True:
-        event_id_str = Prompt.ask("Entrez l'ID de l'événement à modifier (ou 'q' pour annuler)").strip()
-        if event_id_str.lower() == 'q':
-            return
+        event_id_input = Prompt.ask("Enter Event ID to update").strip()
         try:
-            event_id = int(event_id_str)
+            event_id = int(event_id_input)
             break
         except ValueError:
-            console.print("[bold red]Erreur:[/bold red] L'ID doit être un nombre.")
-            
-    # 2. Collecte des données à mettre à jour
+            console.print("[bold red]Error:[/bold red] ID must be a number.")
+
     updates = {}
-    
-    console.print("[dim]Laissez les champs vides/inchangés pour conserver les valeurs actuelles.[/dim]")
-    
-    # Le Support peut mettre à jour ces champs. La Gestion aussi.
-    if current_employee.department != 'Commercial':
-        new_name = Prompt.ask("Nouveau nom de l'événement").strip()
-        if new_name: updates['name'] = new_name
+    console.print("\n[dim]Leave empty to keep current values.[/dim]")
+
+    # 1. Update content fields (Name, Location, Attendees, Dates, Notes)
+    if current_employee.department in ['Gestion', 'Support']:
+        
+        # Name
+        name = Prompt.ask("New Event Name").strip()
+        if name:
+            updates['name'] = name
             
-        new_location = Prompt.ask("Nouveau lieu").strip()
-        if new_location: updates['location'] = new_location
-            
-        attendees_str = Prompt.ask("Nouveau nombre de participants estimés").strip()
+        # Location
+        location = Prompt.ask("New Event Location").strip()
+        if location:
+            updates['location'] = location
+        
+        # Notes
+        notes = Prompt.ask("New Event Notes").strip()
+        if notes:
+            updates['notes'] = notes
+
+        # Attendees
+        attendees_str = Prompt.ask("New Estimated Number of Attendees").strip()
         if attendees_str:
             try:
                 updates['attendees'] = int(attendees_str)
+                if updates['attendees'] < 0:
+                    console.print("[bold red]Error:[/bold red] Number of attendees cannot be negative. Ignored.")
+                    del updates['attendees']
             except ValueError:
-                console.print("[bold red]Erreur:[/bold red] Le nombre de participants doit être un nombre. Annulation de l'entrée.")
-                return
-
-        new_start_date = get_valid_date("Nouvelle date et heure de début")
-        if new_start_date is not None: updates['start_date'] = new_start_date
-
-        new_end_date = get_valid_date("Nouvelle date et heure de fin")
-        if new_end_date is not None: updates['end_date'] = new_end_date
+                console.print("[bold red]Error:[/bold red] Must be an integer. Ignored.")
+                
+        # Dates (must be handled with a separate call)
+        if Confirm.ask("Do you want to modify dates and times? [y/n]"):
+            start_date = get_valid_date("New Start Date and Time")
+            end_date = get_valid_date("New End Date and Time")
             
-        # NOTE: Le contrôleur vérifiera que start_date < end_date si les deux sont fournies.
+            if start_date and end_date:
+                # IMPORTANT: Keys must match model field names
+                updates['event_start'] = start_date 
+                updates['event_end'] = end_date     
+            elif start_date or end_date:
+                 console.print("[bold red]Date modification cancelled:[/bold red] You must provide both start and end dates.")
 
-    # 3. Changement du contact Support : Réservé à l'équipe 'Gestion'
+    # 2. Change Support contact : Reserved for 'Gestion'
     if current_employee.department == 'Gestion':
-        if Confirm.ask("Voulez-vous assigner/réassigner le Contact Support ?"):
-            support_employees = [e for e in list_employees(session) if e.department == 'Support']
+        if Confirm.ask("Do you want to assign/reassign the Support Contact? [y/n]"):
             
-            console.print("\n[bold yellow]Contacts Support disponibles:[/bold yellow]")
+            # Display available support staff (Support and Management)
+            support_employees = [e for e in list_employees(session) if e.department in ['Support', 'Gestion']]
+            console.print("\n[bold yellow]Available Support Contacts (ID | Name):[/bold yellow]")
             for emp in support_employees:
                  console.print(f"  [cyan]{emp.id}[/cyan]: {emp.full_name}")
 
-            new_contact_id_input = Prompt.ask("Entrez Nouvel ID Support (ou '0' pour désassigner)").strip()
+            new_contact_id_input = Prompt.ask("Enter New Support ID (or '0' to unassign)").strip()
             try:
                 new_contact_id = int(new_contact_id_input)
-                # L'argument pour le contrôleur est 'support_contact_id'
                 updates['support_contact_id'] = new_contact_id if new_contact_id != 0 else None
             except ValueError:
-                console.print("[bold red]Erreur:[/bold red] L'ID du support doit être un nombre. Annulation de l'entrée.")
+                console.print("[bold red]Error:[/bold red] Support ID must be a number. Entry cancelled.")
                 
     if not updates:
-        console.print("[bold yellow]INFO:[/bold yellow] Aucune donnée valide fournie pour la mise à jour.")
+        console.print("[bold yellow]INFO:[/bold yellow] No valid data provided for update.")
         return
 
-    # 4. Appel au contrôleur (il vérifie les permissions)
-    updated_event = update_event(
-        session,
-        current_employee,
-        event_id,
-        **updates
-    )
+    # 3. Call controller (it checks permissions)
+    try:
+        updated_event = update_event(
+            session,
+            current_employee,
+            event_id,
+            **updates
+        )
 
-    if updated_event:
-        console.print(f"\n[bold green]SUCCÈS:[/bold green] Événement ID [cyan]{updated_event.id}[/cyan] mis à jour.")
+        if updated_event:
+            console.print(f"\n[bold green]SUCCESS:[/bold green] Event ID {updated_event.id} updated.")
+    except Exception as e:
+        console.print(f"\n[bold red]ERROR:[/bold red] An unexpected error occurred: {e}")
