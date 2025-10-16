@@ -43,7 +43,7 @@ def display_sales_menu(employee: Employee):
     
     console.print("[bold underline]CLIENTS[/bold underline]")
     console.print("1. [green]Create[/green] a new Client")
-    console.print("2. [blue]List[/blue] all Clients")
+    console.print("2. [blue]List[/blue] Clients")
     console.print("3. [yellow]Update[/yellow] a Client")
     
     console.print("\n[bold underline]CONTRACTS[/bold underline]")
