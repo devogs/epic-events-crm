@@ -72,7 +72,7 @@ def list_events(session: Session, current_user: Employee, filter_by_support_id: 
     Permissions:
     - Commercial: Only events linked to their contracts.
     - Support: Events based on the chosen filter (assigned, unassigned, default, or all_db).
-    - Management: All events or filtered by a specific Support ID.
+    - Gestion: All events or filtered by a specific Support ID.
     
     'support_filter_scope' is used ONLY for the 'Support' department:
     - 'mine': Only events assigned to current_user.
@@ -106,10 +106,10 @@ def list_events(session: Session, current_user: Employee, filter_by_support_id: 
              query = query.filter((Event.support_contact_id == current_user.id) | (Event.support_contact_id.is_(None)))
 
     elif filter_by_support_id is not None:
-         # Management can filter by support ID
+         # Gestion can filter by support ID
          query = query.filter(Event.support_contact_id == filter_by_support_id)
 
-    # If Management and filter_by_support_id is None, no filter is added, and all events are returned.
+    # If Gestion and filter_by_support_id is None, no filter is added, and all events are returned.
     
     return query.all()
 
@@ -119,7 +119,7 @@ def update_event(session: Session, current_user: Employee, event_id: int, **kwar
     Updates an existing Event.
     Permissions:
     - Support: Update all fields (excluding sales contact) for assigned events.
-    - Management: Update all fields including support contact reassignment.
+    - Gestion: Update all fields including contract and support contact reassignment.
     - Commercial: Read-only except for event creation.
     """
     try:
@@ -128,12 +128,32 @@ def update_event(session: Session, current_user: Employee, event_id: int, **kwar
             console.print(f"[bold red]ERROR:[/bold red] Event with ID {event_id} not found.")
             return None
             
+        is_gestion = current_user.department == 'Gestion'
+
         # Permission Check for standard field updates (name, attendees, dates, location, notes)
         if current_user.department == 'Commercial':
              raise PermissionError("Commercial staff cannot modify events; they can only create them.")
 
         if current_user.department == 'Support' and event.support_contact_id != current_user.id:
              raise PermissionError("Support staff can only modify events assigned to them.")
+
+        updates_made = False
+
+        # --- Gestion only: Contract ID reassignment ---
+        if 'contract_id' in kwargs:
+            if not is_gestion:
+                raise PermissionError("Only 'Gestion' can reassign the contract ID for an event.")
+            
+            new_contract_id = kwargs['contract_id']
+            new_contract = session.query(Contract).filter_by(id=new_contract_id).one_or_none()
+            
+            if not new_contract or not new_contract.status_signed:
+                raise ValueError(f"Contract ID {new_contract_id} not found or is not signed.")
+            
+            event.contract_id = new_contract_id
+            del kwargs['contract_id']
+            updates_made = True
+
 
         # --- Support Contact (Reassignment/Assignment logic) ---
         if 'support_contact_id' in kwargs:
@@ -144,21 +164,22 @@ def update_event(session: Session, current_user: Employee, event_id: int, **kwar
                  # Support can only assign themselves or unassign (set to None)
                  if new_support_id is not None and new_support_id != current_user.id:
                      raise PermissionError("Support staff can only assign themselves or unassign.")
-             elif current_user.department != 'Gestion':
-                 raise PermissionError("Only Management or Support can change the support contact.")
+             elif not is_gestion:
+                 raise PermissionError("Only Gestion or Support can change the support contact.")
 
              if new_support_id is not None:
-                 # Check if the new support contact is a valid Support or Management employee
+                 # Check if the new support contact is a valid Support or Gestion employee
                  new_support_contact = session.query(Employee).filter(Employee.id==new_support_id, Employee.department.in_(['Support', 'Gestion'])).one_or_none()
                  if not new_support_contact:
-                     raise ValueError(f"Support Contact ID {new_support_id} not found or is not a Support/Management employee.")
+                     raise ValueError(f"Support Contact ID {new_support_id} not found or is not a Support/Gestion employee.")
                      
              event.support_contact_id = new_support_id
              del kwargs['support_contact_id'] 
+             updates_made = True
 
-        updates_made = False
+        # --- General Fields Update ---
         for key, value in kwargs.items():
-            if hasattr(event, key) and key not in ['id', 'contract_id']: 
+            if hasattr(event, key) and key not in ['id']: # contract_id, support_contact_id already handled
                 setattr(event, key, value)
                 updates_made = True
 
