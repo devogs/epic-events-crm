@@ -127,6 +127,10 @@ def update_employee(session: Session, current_user: Employee, employee_id: int, 
     """
     Updates an existing employee record. Only 'Gestion' can perform this action.
     """
+    if not check_permission(current_user, 'update_employee'):
+        console.print("[bold red]Permission denied.[/bold red] Only the 'Gestion' department can update employees.")
+        return None
+    
     employee = session.query(Employee).filter_by(id=employee_id).one_or_none()
     
     if not employee:
