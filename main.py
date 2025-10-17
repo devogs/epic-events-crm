@@ -139,27 +139,27 @@ def main():
             session = get_session() 
             action = 'stay' # Initialise l'action par défaut
             
-            # try:
-            # 2. Recharger l'employé à partir du token (Vérification de validité)
-            logged_in_employee = get_employee_from_token(GLOBAL_JWT_TOKEN, session)
-            
-            if logged_in_employee:
-                # 3. Aiguiller vers le menu approprié
+            try:
+                # 2. Recharger l'employé à partir du token (Vérification de validité)
+                logged_in_employee = get_employee_from_token(GLOBAL_JWT_TOKEN, session)
                 
-                # CORRECTION CRITIQUE: Décomposition du tuple de retour (action, nouveau_token)
-                action, new_token_from_menu = main_menu_router(logged_in_employee, session, GLOBAL_JWT_TOKEN)
-                
-                # Mise à jour du token global (peut être None si 'logout')
-                GLOBAL_JWT_TOKEN = new_token_from_menu 
-            else:
-                # Jeton invalide ou expiré (le message est déjà dans get_employee_from_token)
+                if logged_in_employee:
+                    # 3. Aiguiller vers le menu approprié
+                    
+                    # CORRECTION CRITIQUE: Décomposition du tuple de retour (action, nouveau_token)
+                    action, new_token_from_menu = main_menu_router(logged_in_employee, session, GLOBAL_JWT_TOKEN)
+                    
+                    # Mise à jour du token global (peut être None si 'logout')
+                    GLOBAL_JWT_TOKEN = new_token_from_menu 
+                else:
+                    # Jeton invalide ou expiré (le message est déjà dans get_employee_from_token)
+                    action = 'logout'
+            except Exception as e:
+                # Si une erreur inattendue se produit dans le menu ou le routeur, se déconnecter
+                console.print(f"[bold red]An unexpected error occurred in the main loop:[/bold red] {e}")
                 action = 'logout'
-            # except Exception as e:
-            #     # Si une erreur inattendue se produit dans le menu ou le routeur, se déconnecter
-            #     console.print(f"[bold red]An unexpected error occurred in the main loop:[/bold red] {e}")
-            #     action = 'logout'
-            # finally:
-            #     session.close() 
+            finally:
+                session.close() 
             
             # 4. Gérer l'action de sortie du menu
             if action == 'quit':
