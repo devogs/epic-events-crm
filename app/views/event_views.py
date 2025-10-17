@@ -14,7 +14,7 @@ from app.controllers.event_controller import (
     list_events,
     update_event,
 )
-from app.controllers.employee_controller import list_employees # To display the list of support staff during assignment
+from app.controllers.employee_controller import list_employees 
 
 console = Console()
 
@@ -140,6 +140,7 @@ def list_events_cli(session, current_employee: Employee):
     console.print("\n[bold blue]-- LIST EVENTS --[/bold blue]")
 
     filter_id = None
+    support_scope = None
     title = "ALL EVENTS"
 
     if current_employee.department == 'Commercial':
@@ -147,9 +148,25 @@ def list_events_cli(session, current_employee: Employee):
         title = f"EVENTS FOR MY CLIENTS (Sales ID: {current_employee.id})"
         
     elif current_employee.department == 'Support':
-        # Support default: Assigned events OR Unassigned events. The controller handles this.
-        filter_id = current_employee.id # Controller interprets this as 'my assigned OR unassigned'
-        title = f"MY ASSIGNED EVENTS + UNASSIGNED (Support ID: {current_employee.id})"
+        # NEW FILTERING LOGIC FOR SUPPORT
+        choice = Prompt.ask(
+            "Filter events? [1: My Assigned Events | 2: Unassigned Events | 3: My Assigned & Unassigned (Default) | 4: All CRM Events]",
+            choices=['1', '2', '3', '4'], 
+            default='3'
+        ).strip()
+        
+        if choice == '1':
+            support_scope = 'mine'
+            title = f"MY ASSIGNED EVENTS (Support ID: {current_employee.id})"
+        elif choice == '2':
+            support_scope = 'unassigned'
+            title = "UNASSIGNED EVENTS"
+        elif choice == '3':
+            support_scope = 'default'
+            title = f"MY ASSIGNED & UNASSIGNED EVENTS (Support ID: {current_employee.id})"
+        elif choice == '4':
+            support_scope = 'all_db'
+            title = "ALL CRM EVENTS (All Assigned / Unassigned)"
 
     elif current_employee.department == 'Gestion':
         # Management options: All (default) or filter by Support ID
@@ -168,7 +185,12 @@ def list_events_cli(session, current_employee: Employee):
         
     # Call controller
     try:
-        events = list_events(session, current_employee, filter_by_support_id=filter_id)
+        events = list_events(
+            session, 
+            current_employee, 
+            filter_by_support_id=filter_id, 
+            support_filter_scope=support_scope
+        )
 
         if events is not None:
             display_event_table(events, title)
@@ -230,9 +252,7 @@ def update_event_cli(session, current_employee: Employee):
         
         if Confirm.ask("Do you want to assign/reassign the Support Contact?"):
             
-            # --- CRITICAL FIX HERE: Filter list to only show Support department employees ---
-            
-            # Management should only list employees in the 'Support' department for assignment
+            # --- Management (Gestion) ---
             if current_employee.department == 'Gestion':
                 # Get employees whose department is 'Support'
                 support_employees = [e for e in list_employees(session) if e.department == 'Support']
@@ -252,7 +272,7 @@ def update_event_cli(session, current_employee: Employee):
                 except ValueError:
                     console.print("[bold red]Error:[/bold red] Support ID must be a number. Entry cancelled.")
         
-            # Support can self-assign/unassign
+            # --- Support ---
             elif current_employee.department == 'Support':
                  assign_choice = Prompt.ask("Assign to yourself (A) or Unassign (U)?", choices=['a', 'u']).lower()
                  if assign_choice == 'a':

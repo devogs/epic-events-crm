@@ -7,9 +7,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from rich.console import Console
 from sqlalchemy.orm import joinedload 
-from sqlalchemy import or_, func 
 
-from app.models import Contract, Event, Employee
+from app.models import Contract, Event, Employee, Role
 from app.authentication import check_permission
 
 console = Console()
@@ -19,7 +18,10 @@ console = Console()
 # =============================================================================
 
 def create_event(session: Session, current_user: Employee, contract_id: int, name: str, attendees: int, start_date: datetime.datetime, end_date: datetime.datetime, location: str, notes: str) -> Event | None:
-    # ... (fonction inchangée)
+    """
+    Creates a new Event for a signed contract.
+    Permissions: Commercial only, for their signed contracts.
+    """
     if not check_permission(current_user, 'create_event'):
         raise PermissionError("Permission denied to create events.")
 
@@ -33,138 +35,144 @@ def create_event(session: Session, current_user: Employee, contract_id: int, nam
         return None
 
     if contract.sales_contact_id != current_user.id:
-        console.print("[bold red]ERROR:[/bold red] You can only create events for your clients' contracts.")
+        console.print(f"[bold red]ERROR:[/bold red] You are not the sales contact for Contract ID {contract_id}.")
         return None
         
     if start_date >= end_date:
-        console.print("[bold red]ERROR:[/bold red] Start date must be before end date.")
-        return None
+         console.print("[bold red]ERROR:[/bold red] Start date must be before end date.")
+         return None
 
     try:
         new_event = Event(
             contract_id=contract_id,
+            support_contact_id=None, # Initially unassigned
             name=name,
             attendees=attendees,
             event_start=start_date,
             event_end=end_date,
             location=location,
-            notes=notes,
-            support_contact_id=None 
+            notes=notes
         )
-
         session.add(new_event)
         session.commit()
         return new_event
-
+    except IntegrityError as e:
+        session.rollback()
+        console.print(f"[bold red]ERROR:[/bold red] Integrity constraint failed (e.g., contract_id not found): {e}")
+        return None
     except Exception as e:
         session.rollback()
-        console.print(f"[bold red]FATAL ERROR during event creation:[/bold red] {e}")
+        console.print(f"[bold red]ERROR during event creation:[/bold red] {e}")
         return None
 
 
-def list_events(
-    session: Session, 
-    current_user: Employee, 
-    filter_by_support_id: int | None = None, 
-    filter_unassigned: bool = False,
-) -> list[Event]:    
-    # ... (fonction inchangée)
+def list_events(session: Session, current_user: Employee, filter_by_support_id: int | None = None, support_filter_scope: str | None = None) -> list[Event]:
+    """
+    Retrieves a list of events.
+    Permissions:
+    - Commercial: Only events linked to their contracts.
+    - Support: Events based on the chosen filter (assigned, unassigned, default, or all_db).
+    - Management: All events or filtered by a specific Support ID.
+    
+    'support_filter_scope' is used ONLY for the 'Support' department:
+    - 'mine': Only events assigned to current_user.
+    - 'unassigned': Only events not assigned (support_contact_id IS NULL).
+    - 'default': Both assigned to user and unassigned (the standard scope).
+    - 'all_db': All events in the database (new option).
+    """
     if not check_permission(current_user, 'view_events'):
         raise PermissionError("Permission denied to view events.")
 
-    query = session.query(Event).options(
-        joinedload(Event.contract),
-        joinedload(Event.support_contact)
-    )
+    # Eager loading related entities for display
+    query = session.query(Event).options(joinedload(Event.contract).joinedload(Contract.sales_contact), joinedload(Event.support_contact))
 
     if current_user.department == 'Commercial':
+        # Commercial sees events linked to their contracts.
         query = query.join(Contract).filter(Contract.sales_contact_id == current_user.id)
+    
     elif current_user.department == 'Support':
-        if filter_by_support_id is None and not filter_unassigned:
-             query = query.filter(Event.support_contact_id == current_user.id)
-        
-    if filter_by_support_id is not None:
-        query = query.filter(Event.support_contact_id == filter_by_support_id)
-        
-    if filter_unassigned:
-        query = query.filter(Event.support_contact_id.is_(None))
-        
+        # NEW LOGIC: Support filtering based on support_filter_scope
+        if support_filter_scope == 'all_db':
+             # No filter applied, returns all events in the database
+             pass 
+        elif support_filter_scope == 'mine':
+            query = query.filter(Event.support_contact_id == current_user.id)
+            
+        elif support_filter_scope == 'unassigned':
+            query = query.filter(Event.support_contact_id.is_(None))
+            
+        elif support_filter_scope == 'default' or support_filter_scope is None:
+             # Default comprehensive view: assigned to me OR unassigned
+             query = query.filter((Event.support_contact_id == current_user.id) | (Event.support_contact_id.is_(None)))
+
+    elif filter_by_support_id is not None:
+         # Management can filter by support ID
+         query = query.filter(Event.support_contact_id == filter_by_support_id)
+
+    # If Management and filter_by_support_id is None, no filter is added, and all events are returned.
+    
     return query.all()
+
 
 def update_event(session: Session, current_user: Employee, event_id: int, **kwargs) -> Event | None:
     """
-    Updates an existing Event record.
-    Permissions: Gestion can update all. Commercial can update non-assigned events. Support can update their assigned events.
+    Updates an existing Event.
+    Permissions:
+    - Support: Update all fields (excluding sales contact) for assigned events.
+    - Management: Update all fields including support contact reassignment.
+    - Commercial: Read-only except for event creation.
     """
-    event = session.query(Event).filter_by(id=event_id).one_or_none()
-    
-    if not event:
-        console.print(f"[bold red]ERROR:[/bold red] Event with ID {event_id} not found.")
-        return None
-        
-    if not check_permission(current_user, 'update_event'):
-        raise PermissionError("Permission denied to update events.")
-
-    is_assigned_to_support = event.support_contact_id == current_user.id
-
-    if current_user.department == 'Commercial':
-        is_sales_contact = event.contract.sales_contact_id == current_user.id
-        if not is_sales_contact:
-            console.print("[bold red]ERROR:[/bold red] You can only update events for your clients' contracts.")
-            return None
-        if event.support_contact_id is not None:
-            console.print("[bold red]ERROR:[/bold red] Event is assigned to Support. Only Support or Gestion can update it now.")
+    try:
+        event = session.query(Event).filter_by(id=event_id).one_or_none()
+        if not event:
+            console.print(f"[bold red]ERROR:[/bold red] Event with ID {event_id} not found.")
             return None
             
-    elif current_user.department == 'Support' and not is_assigned_to_support:
-        console.print("[bold red]ERROR:[/bold red] You can only update events assigned to you.")
-        return None
+        # Permission Check for standard field updates (name, attendees, dates, location, notes)
+        if current_user.department == 'Commercial':
+             raise PermissionError("Commercial staff cannot modify events; they can only create them.")
 
-    try:
-        # Handle support contact assignment/reassignment
-        updates_made = False
+        if current_user.department == 'Support' and event.support_contact_id != current_user.id:
+             raise PermissionError("Support staff can only modify events assigned to them.")
 
+        # --- Support Contact (Reassignment/Assignment logic) ---
         if 'support_contact_id' in kwargs:
-             new_support_id = kwargs['support_contact_id']
+             new_support_id = kwargs['support_contact_id'] # Can be int or None (for unassign)
              
+             # Specific permission checks for the support assignment field
              if current_user.department == 'Support':
+                 # Support can only assign themselves or unassign (set to None)
                  if new_support_id is not None and new_support_id != current_user.id:
                      raise PermissionError("Support staff can only assign themselves or unassign.")
-             
+             elif current_user.department != 'Gestion':
+                 raise PermissionError("Only Management or Support can change the support contact.")
+
              if new_support_id is not None:
-                 # FIX CRITIQUE: Vérifier l'employé par ID, puis VÉRIFIER LE DÉPARTEMENT EN PYTHON.
-                 # Cela contourne les problèmes de type/propriété de la base de données.
-                 new_support_contact = session.query(Employee).filter(
-                     Employee.id == new_support_id
-                 ).one_or_none()
-                 
-                 # Vérification en Python après le chargement
-                 if not new_support_contact or new_support_contact.department.strip() not in ['Support', 'Gestion']:
-                     raise ValueError(f"ID {new_support_id} for new support contact not found or is not Support/Gestion.")
+                 # Check if the new support contact is a valid Support or Management employee
+                 new_support_contact = session.query(Employee).filter(Employee.id==new_support_id, Employee.department.in_(['Support', 'Gestion'])).one_or_none()
+                 if not new_support_contact:
+                     raise ValueError(f"Support Contact ID {new_support_id} not found or is not a Support/Management employee.")
                      
-             # Appliquer le changement
              event.support_contact_id = new_support_id
              del kwargs['support_contact_id'] 
-             updates_made = True
 
-
+        updates_made = False
         for key, value in kwargs.items():
             if hasattr(event, key) and key not in ['id', 'contract_id']: 
                 setattr(event, key, value)
                 updates_made = True
 
-        if ('event_start' in kwargs or 'event_end' in kwargs) and event.event_start >= event.event_end:
+        if updates_made and event.event_start is not None and event.event_end is not None and event.event_start >= event.event_end:
              raise ValueError("Start date must be before end date.")
 
 
-        if updates_made: 
+        if updates_made:
             session.commit()
             return event
         else:
-            # Si aucune mise à jour n'a eu lieu
             return event
-
+        
     except Exception as e:
         session.rollback()
-        console.print(f"[bold red]ERROR during event update:[/bold red] {e}")
+        console.print(f"[bold red]ERROR during event modification:[/bold red] {e}")
         return None
