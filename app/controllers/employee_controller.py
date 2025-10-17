@@ -9,8 +9,11 @@ from rich.console import Console
 from rich.table import Table
 
 from app.models import Employee, Role
-# Nous avons besoin de hash_password pour le format_email, mais on ne l'utilisera plus directement pour la création.
 from app.authentication import hash_password, check_permission 
+
+# --- SENTRY IMPORT ---
+import sentry_sdk 
+# ---------------------
 
 console = Console()
 
@@ -58,7 +61,6 @@ def format_email(full_name: str, session: Session) -> str:
 # --- EMPLOYEES CRUD ---
 # =============================================================================
 
-# --- FONCTION CRITIQUE CORRIGÉE : Suppression du hachage explicite ---
 def create_employee(session: Session, current_user: Employee, full_name: str, email: str, phone: str, department: str, password: str) -> Employee | None:
     """
     Creates a new employee (Management only).
@@ -88,9 +90,6 @@ def create_employee(session: Session, current_user: Employee, full_name: str, em
         return None
 
     try:
-        # L'ERREUR ÉTAIT ICI : SUPPRESSION DE L'APPEL À hash_password()
-        # Le setter de mot de passe dans models.py s'occupe du hachage.
-        
         # 4. Création de l'employé
         new_employee = Employee(
             full_name=full_name,
@@ -102,14 +101,26 @@ def create_employee(session: Session, current_user: Employee, full_name: str, em
         
         session.add(new_employee)
         session.commit()
+        
+        # --- JOURNALISATION SENTRY (CRÉATION) ---
+        sentry_sdk.capture_message(
+            f"Employee CREATED: {new_employee.full_name} (ID: {new_employee.id}) in {new_employee.department} by User ID {current_user.id}",
+            level="info"
+        )
+        # ----------------------------------------
+        
         return new_employee
         
     except IntegrityError:
         session.rollback()
+        # Capture de l'exception
+        sentry_sdk.capture_exception()
         console.print("[bold red]ERROR:[/bold red] Database integrity error. Check if the provided email/phone is already in use.")
         return None
     except Exception as e:
         session.rollback()
+        # Capture de l'exception
+        sentry_sdk.capture_exception(e)
         console.print(f"[bold red]FATAL ERROR:[/bold red] An unexpected error occurred during employee creation: {e}")
         return None
 
@@ -173,6 +184,20 @@ def update_employee(session: Session, current_user: Employee, employee_id: int, 
 
         if updates_made:
             session.commit()
+            
+            # --- JOURNALISATION SENTRY (MODIFICATION) ---
+            sentry_sdk.set_context("employee_update", {
+                "employee_id": employee.id,
+                "updated_by": current_user.id,
+                "updates": kwargs,
+            })
+            sentry_sdk.capture_message(
+                f"Employee UPDATED: {employee.full_name} (ID: {employee.id}). Fields modified: {list(kwargs.keys())}.",
+                level="info"
+            )
+            sentry_sdk.set_context("employee_update", {}) # Effacer le contexte
+            # ----------------------------------------
+            
             return employee
         else:
             # Si aucune mise à jour n'a été faite, retournez l'objet original.
@@ -180,14 +205,20 @@ def update_employee(session: Session, current_user: Employee, employee_id: int, 
         
     except ValueError as e:
         session.rollback()
+        # Capture de l'exception
+        sentry_sdk.capture_exception(e)
         console.print(f"[bold red]ERROR:[/bold red] {e}")
         return None
     except IntegrityError:
         session.rollback()
+        # Capture de l'exception
+        sentry_sdk.capture_exception()
         console.print("[bold red]ERROR:[/bold red] Database integrity error. Check if the provided email/phone is already in use.")
         return None
     except Exception as e:
         session.rollback()
+        # Capture de l'exception
+        sentry_sdk.capture_exception(e)
         console.print(f"[bold red]FATAL ERROR:[/bold red] An unexpected error occurred during employee update: {e}")
         return None
 
@@ -219,5 +250,7 @@ def delete_employee(session: Session, employee_id: int) -> bool:
         return False
     except SQLAlchemyError as e:
         session.rollback()
+        # Capture de l'exception
+        sentry_sdk.capture_exception(e)
         console.print(f"[bold red]ERROR:[/bold red] Failed to delete employee. Details: {e}")
         return False
