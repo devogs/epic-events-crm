@@ -20,10 +20,10 @@ console = Console()
 def create_contract(session: Session, current_user: Employee, client_id: int, total_amount: Decimal, remaining_amount: Decimal, status_signed: bool) -> Contract | None:
     """
     Creates a new Contract.
-    Permissions: Gestion only.
+    Permissions: Management only.
     """
     if not check_permission(current_user, 'create_contract'):
-        raise PermissionError("Permission denied. Only 'Gestion' can create contracts.")
+        raise PermissionError("Permission denied. Only 'Management' can create contracts.")
 
     if total_amount <= 0 or remaining_amount < 0 or remaining_amount > total_amount:
         console.print("[bold red]ERROR:[/bold red] Invalid amounts.")
@@ -37,100 +37,102 @@ def create_contract(session: Session, current_user: Employee, client_id: int, to
     try:
         new_contract = Contract(
             client_id=client_id,
-            sales_contact_id=client.sales_contact_id, 
+            client=client,
+            sales_contact_id=client.sales_contact_id, # Contract inherits the client's Sales Contact
             total_amount=total_amount,
             remaining_amount=remaining_amount,
-            status_signed=status_signed # <-- NEW: Explicit signed status
+            status_signed=status_signed
         )
         session.add(new_contract)
         session.commit()
         return new_contract
-    
+    except IntegrityError as e:
+        session.rollback()
+        console.print(f"[bold red]ERROR:[/bold red] Integrity constraint failed (e.g., client_id not found or duplicate key): {e}")
+        return None
     except Exception as e:
         session.rollback()
         console.print(f"[bold red]ERROR during contract creation:[/bold red] {e}")
         return None
 
 
-def list_contracts(session: Session, current_user: Employee, filter_by_sales_id: int | None = None, filter_signed: bool | None = None, filter_unpaid: bool = False, filter_unsigned: bool | None = None) -> list[Contract]:
+def list_contracts(session: Session, current_user: Employee, filter_by_sales_id: int | None = None) -> list[Contract]:
     """
-    Retrieves a list of contracts.
-    Permissions: Gestion sees all. Commercial sees contracts for their clients. Support sees all.
-    (Function kept consistent with existing logic)
+    Retrieves a list of contracts, filtered by sales contact if requested.
+    Permissions: 
+    - Management/Support: Can view all or filter by Sales ID.
+    - Commercial: Only views their own contracts.
     """
     if not check_permission(current_user, 'view_contracts'):
         raise PermissionError("Permission denied to view contracts.")
 
-    # Eager load the client and sales contact for display in the view
-    query = session.query(Contract).options(
-        joinedload(Contract.client),
-        joinedload(Contract.sales_contact)
-    )
+    # Eager loading related entities for display optimization
+    query = session.query(Contract).options(joinedload(Contract.client), joinedload(Contract.sales_contact)) 
 
-    # Authorization Filters
+    # 1. Commercial Role: Always restricted to their own contracts.
     if current_user.department == 'Commercial':
-        # Commercial only sees contracts for their clients
-        query = query.join(Client).filter(Client.sales_contact_id == current_user.id)
-    
-    # CLI Filters
-    if filter_by_sales_id is not None:
-        query = query.filter(Contract.sales_contact_id == filter_by_sales_id)
+        query = query.filter(Contract.sales_contact_id == current_user.id)
         
-    if filter_signed is True:
-        query = query.filter(Contract.status_signed == True)
-    elif filter_unsigned is True:
-        query = query.filter(Contract.status_signed == False)
-        
-    if filter_unpaid:
-        query = query.filter(Contract.remaining_amount > Decimal('0.00'))
-        
+    # 2. Management/Support Roles: Can see all (filter_by_sales_id is None) 
+    # or filter by a specific Sales ID.
+    elif filter_by_sales_id is not None:
+         query = query.filter(Contract.sales_contact_id == filter_by_sales_id)
+         
+    # If it's Management or Support and filter_by_sales_id is None, no filter is added, and all contracts are returned.
+
     return query.all()
 
 
 def update_contract(session: Session, current_user: Employee, contract_id: int, **kwargs) -> Contract | None:
     """
-    Updates an existing Contract record.
-    Permissions: Gestion can update all. Commercial can update their clients' contracts (excluding total amount).
+    Updates an existing Contract.
+    Permissions:
+    - Commercial: Update remaining amount and signed status for their own contracts.
+    - Management: Update all fields including sales contact reassignment.
     """
-    contract = session.query(Contract).filter_by(id=contract_id).one_or_none()
-    
-    if not contract:
-        console.print(f"[bold red]ERROR:[/bold red] Contract with ID {contract_id} not found.")
-        return None
-        
-    if not check_permission(current_user, 'update_contract'):
-        raise PermissionError("Permission denied to update contracts.")
-        
-    # Secondary Authorization Check for Commercial
-    is_sales_contact = contract.sales_contact_id == current_user.id
-    if current_user.department == 'Commercial' and not is_sales_contact:
-        console.print("[bold red]ERROR:[/bold red] You can only update contracts assigned to your clients.")
-        return None
-
     try:
+        contract = session.query(Contract).filter_by(id=contract_id).one_or_none()
+        if not contract:
+            console.print(f"[bold red]ERROR:[/bold red] Contract with ID {contract_id} not found.")
+            return None
+        
+        # Check if the current user is the Sales Contact for the contract
+        is_sales_contact = (contract.sales_contact_id == current_user.id)
+
+        # Permission check: Commercial staff can update the remaining amount and signed status for their own clients' contracts.
+        if current_user.department == 'Commercial' and not is_sales_contact:
+            raise PermissionError("Commercial staff can only update the remaining amount and signed status for their own contracts.")
+
         updates_made = False
 
-        # --- Remaining Amount ---
+        # --- Remaining Amount (REMAINING) ---
         if 'remaining_amount' in kwargs:
-            new_remaining = Decimal(str(kwargs['remaining_amount']))
+            try:
+                new_remaining = Decimal(kwargs['remaining_amount'])
+            except:
+                raise ValueError("Remaining amount must be a valid number.")
+                
             if new_remaining < 0 or new_remaining > contract.total_amount:
-                raise ValueError("Remaining amount is invalid.")
-
+                raise ValueError(f"Remaining amount must be between 0 and total amount ({contract.total_amount}).") 
+            
             contract.remaining_amount = new_remaining
-            # REMOVED: Implicit signed status update
             updates_made = True
-            
-        # --- Total Amount ---
+
+        # --- Total Amount (TOTAL) ---
         if 'total_amount' in kwargs:
-            if current_user.department != 'Gestion':
-                raise PermissionError("Only 'Gestion' can change the total contract amount.")
-            
-            new_total = Decimal(str(kwargs['total_amount']))
+            if current_user.department not in ['Gestion']:
+                raise PermissionError("Only 'Management' can modify the total amount.")
+                
+            try:
+                new_total = Decimal(kwargs['total_amount'])
+            except:
+                raise ValueError("Total amount must be a valid number.")
+                
             if new_total <= 0:
-                raise ValueError("Total amount must be positive.")
-            
+                raise ValueError("Total amount must be greater than 0.")
+                
             if new_total < contract.remaining_amount:
-                 raise ValueError("Total amount cannot be less than the remaining amount.")
+                raise ValueError("Total amount cannot be less than the remaining amount.") 
             
             contract.total_amount = new_total
             updates_made = True
@@ -143,10 +145,10 @@ def update_contract(session: Session, current_user: Employee, contract_id: int, 
             contract.status_signed = bool(kwargs['status_signed'])
             updates_made = True
             
-        # --- Sales Contact (Reassignment logic, reserved for Gestion) ---
+        # --- Sales Contact (Reassignment logic, reserved for Management) ---
         if 'sales_contact_id' in kwargs:
             if current_user.department != 'Gestion':
-                raise PermissionError("Only 'Gestion' can reassign the sales contact.")
+                raise PermissionError("Only 'Management' can reassign the sales contact.")
             
             new_sales_id = kwargs['sales_contact_id']
             new_sales_contact = session.query(Employee).filter_by(id=new_sales_id).one_or_none()
