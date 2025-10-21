@@ -19,7 +19,9 @@ console = Console()
 def display_contract_table(contracts: List[Contract], title: str):
     """Utility function to display contracts in a Rich Table."""
     if not contracts:
-        console.print(f"[bold yellow]INFO:[/bold yellow] No contracts found for the '{title}' display.")
+        console.print(
+            f"[bold yellow]INFO:[/bold yellow] No contracts found for the '{title}' display."
+        )
         return
 
     table = Table(title=title, show_header=True, header_style="bold cyan")
@@ -31,9 +33,21 @@ def display_contract_table(contracts: List[Contract], title: str):
     table.add_column("Signed", min_width=10, justify="center")
 
     for contract in contracts:
-        client_info = f"{contract.client.full_name} ({contract.client_id})" if contract.client else "N/A"
-        sales_info = f"{contract.sales_contact.full_name} ({contract.sales_contact_id})" if contract.sales_contact else "N/A"
-        signed_status = "[bold green]YES[/bold green]" if contract.status_signed else "[bold red]NO[/bold red]"
+        client_info = (
+            f"{contract.client.full_name} ({contract.client_id})"
+            if contract.client
+            else "N/A"
+        )
+        sales_info = (
+            f"{contract.sales_contact.full_name} ({contract.sales_contact_id})"
+            if contract.sales_contact
+            else "N/A"
+        )
+        signed_status = (
+            "[bold green]YES[/bold green]"
+            if contract.status_signed
+            else "[bold red]NO[/bold red]"
+        )
 
         table.add_row(
             str(contract.id),
@@ -67,8 +81,10 @@ def create_contract_cli(session: Session, current_employee: Employee):
         console.print("[bold red]ERROR:[/bold red] Invalid remaining amount format.")
         return
 
-    status_signed_choice = Prompt.ask("Is the contract signed? (Y/N)", choices=['y', 'n']).lower()
-    status_signed = status_signed_choice == 'y'
+    status_signed_choice = Prompt.ask(
+        "Is the contract signed? (Y/N)", choices=["y", "n"]
+    ).lower()
+    status_signed = status_signed_choice == "y"
 
     new_contract = create_contract(
         session,
@@ -80,7 +96,9 @@ def create_contract_cli(session: Session, current_employee: Employee):
     )
 
     if new_contract:
-        console.print(f"\n[bold green]SUCCESS:[/bold green] Contract created (ID: {new_contract.id}) for Client {new_contract.client_id}.")
+        console.print(
+            f"\n[bold green]SUCCESS:[/bold green] Contract created (ID: {new_contract.id}) for Client {new_contract.client_id}."
+        )
 
 
 def list_contracts_cli(session: Session, current_employee: Employee):
@@ -89,18 +107,26 @@ def list_contracts_cli(session: Session, current_employee: Employee):
 
     filter_choice = Prompt.ask(
         "Filter contracts? (1: Assigned to me, 2: Signed, 3: Unsigned, 4: All, Leave empty for All)",
-        choices=['1', '2', '3', '4', ''],
-        default='4'
+        choices=["1", "2", "3", "4", ""],
+        default="4",
     ).strip()
 
-    if filter_choice == '1':
-        contracts = list_contracts(session, current_employee, filter_by_sales_id=current_employee.id)
-        display_contract_table(contracts, f"Contracts Assigned to {current_employee.full_name}")
-    elif filter_choice == '2':
-        contracts = list_contracts(session, current_employee, filter_by_signed_status=True)
+    if filter_choice == "1":
+        contracts = list_contracts(
+            session, current_employee, filter_by_sales_id=current_employee.id
+        )
+        display_contract_table(
+            contracts, f"Contracts Assigned to {current_employee.full_name}"
+        )
+    elif filter_choice == "2":
+        contracts = list_contracts(
+            session, current_employee, filter_by_signed_status=True
+        )
         display_contract_table(contracts, "Signed Contracts")
-    elif filter_choice == '3':
-        contracts = list_contracts(session, current_employee, filter_by_signed_status=False)
+    elif filter_choice == "3":
+        contracts = list_contracts(
+            session, current_employee, filter_by_signed_status=False
+        )
         display_contract_table(contracts, "Unsigned Contracts")
     else:
         contracts = list_contracts(session, current_employee)
@@ -121,60 +147,81 @@ def update_contract_cli(session: Session, current_employee: Employee):
     updates = {}
 
     # Total Amount
-    total_amount_str = Prompt.ask("Enter New Total Amount (€) (Leave empty to skip)").strip()
+    total_amount_str = Prompt.ask(
+        "Enter New Total Amount (€) (Leave empty to skip)"
+    ).strip()
     if total_amount_str:
         try:
-            updates['total_amount'] = Decimal(total_amount_str)
+            updates["total_amount"] = Decimal(total_amount_str)
         except Exception:
-            console.print("[bold red]ERROR:[/bold red] Invalid total amount format. Skipping total amount update.")
+            console.print(
+                "[bold red]ERROR:[/bold red] Invalid total amount format. Skipping total amount update."
+            )
 
     # Remaining Amount
-    remaining_amount_str = Prompt.ask("Enter New Remaining Amount (€) (Leave empty to skip)").strip()
+    remaining_amount_str = Prompt.ask(
+        "Enter New Remaining Amount (€) (Leave empty to skip)"
+    ).strip()
     if remaining_amount_str:
         try:
-            updates['remaining_amount'] = Decimal(remaining_amount_str)
+            updates["remaining_amount"] = Decimal(remaining_amount_str)
         except Exception:
-            console.print("[bold red]ERROR:[/bold red] Invalid remaining amount format. Skipping remaining amount update.")
+            console.print(
+                "[bold red]ERROR:[/bold red] Invalid remaining amount format. Skipping remaining amount update."
+            )
 
     # Signed Status
-    is_signed_choice = Prompt.ask("New Signed Status? (Y: Yes, N: No, Leave empty)", choices=['y', 'n', ''], default='').lower()
-    if is_signed_choice == 'y':
-        updates['status_signed'] = True
-    elif is_signed_choice == 'n':
-        updates['status_signed'] = False
+    is_signed_choice = Prompt.ask(
+        "New Signed Status? (Y: Yes, N: No, Leave empty)",
+        choices=["y", "n", ""],
+        default="",
+    ).lower()
+    if is_signed_choice == "y":
+        updates["status_signed"] = True
+    elif is_signed_choice == "n":
+        updates["status_signed"] = False
 
     # Gestion-only fields
-    if current_employee.department == 'Gestion':
+    if current_employee.department == "Gestion":
         # Client ID (Le champ manquant)
-        new_client_id_input = Prompt.ask("Enter New Client ID (Leave empty to skip)").strip()
+        new_client_id_input = Prompt.ask(
+            "Enter New Client ID (Leave empty to skip)"
+        ).strip()
         if new_client_id_input:
             try:
-                updates['client_id'] = int(new_client_id_input)
+                updates["client_id"] = int(new_client_id_input)
             except ValueError:
-                console.print("[bold red]ERROR:[/bold red] Client ID must be a number. Entry cancelled.")
+                console.print(
+                    "[bold red]ERROR:[/bold red] Client ID must be a number. Entry cancelled."
+                )
 
         # Sales Contact ID
         if Confirm.ask("Do you want to reassign the Sales Contact? [y/n]"):
             new_contact_id_input = Prompt.ask("Enter New Sales Contact ID").strip()
             if new_contact_id_input:
                 try:
-                    updates['sales_contact_id'] = int(new_contact_id_input)
+                    updates["sales_contact_id"] = int(new_contact_id_input)
                 except ValueError:
-                    console.print("[bold red]ERROR:[/bold red] Sales ID must be a number. Entry cancelled.")
+                    console.print(
+                        "[bold red]ERROR:[/bold red] Sales ID must be a number. Entry cancelled."
+                    )
 
     if not updates:
-        console.print("[bold yellow]INFO:[/bold yellow] No valid data provided for update.")
+        console.print(
+            "[bold yellow]INFO:[/bold yellow] No valid data provided for update."
+        )
         return
 
     try:
         updated_contract = update_contract(
-            session,
-            current_employee,
-            contract_id,
-            **updates
+            session, current_employee, contract_id, **updates
         )
 
         if updated_contract:
-            console.print(f"\n[bold green]SUCCESS:[/bold green] Contract ID {updated_contract.id} updated.")
+            console.print(
+                f"\n[bold green]SUCCESS:[/bold green] Contract ID {updated_contract.id} updated."
+            )
     except Exception as e:
-        console.print(f"\n[bold red]ERROR:[/bold red] An unexpected error occurred: {e}")
+        console.print(
+            f"\n[bold red]ERROR:[/bold red] An unexpected error occurred: {e}"
+        )

@@ -75,12 +75,13 @@ The content of database/.env must be as follows:
 --- DATABASE CONFIGURATION (PostgreSQL) ---
 These variables are used by SQLAlchemy in app/models.py
 ```bash
-DB_HOST=localhost
-DB_NAME=epicevents_db
-DB_USER=epicevents_user
-DB_PASSWORD=epicevents_pass
-DB_PORT=5432
-DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}
+POSTGRES_USER=epic-events-admin
+POSTGRES_PASSWORD=<StrongPostgresPassword>
+POSTGRES_DB=epic_events_db
+POSTGRES_ADDRESS=localhost
+
+APP_USER=epic-events-user
+APP_PASSWORD=<StrongAppPawword>
 
 # --- SENTRY CONFIGURATION ---
 # Replace <YOUR_SENTRY_DSN> with your Sentry project DSN key
@@ -102,11 +103,20 @@ Make sure the docker-compose.yml file is present in the root of your project.
 
 Start the database container:
 ```bash
+cd database/
 docker compose up -d
 ```
 
-
 The PostgreSQL service is now started and accessible via localhost:5432.
+
+## 2.3 Entity Relationship Diagram
+
+The ERD has been drew on DrawDB.app:
+https://www.drawdb.app/editor?shareId=11b69b83c25ac27559600403c102fb4e
+
+![Alt text](database/erd.png)
+
+In case of failure charging the diagram, File > Import from > JSON and select erd.json in database/
 
 # 3. Application Startup
 
@@ -124,6 +134,8 @@ During the first run, the system will prompt you to create a user account (the f
 ## 3.2. Login
 
 Use the email and password of the created user to log in. The application will automatically route you to the menu corresponding to your department.
+
+CHANGE DEFAULT ADMIN PASSWORD 
 
 # 4. Error Monitoring with Sentry
 
