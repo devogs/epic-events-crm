@@ -1,0 +1,5 @@
+[MESSAGES CONTROL]
+disable=import-error,too-many-arguments,too-many-positional-arguments,broad-exception-caught,too-many-return-statements,no-else-return,too-many-branches,ungrouped-imports,invalid-name,no-member,global-statement,protected-access,f-string-without-interpolation,too-many-statements,too-many-locals,consider-using-min-builtin,singleton-comparison,wrong-import-order
+
+[FORMAT]
+max-line-length=100
