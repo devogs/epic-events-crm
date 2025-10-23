@@ -120,12 +120,12 @@ def list_contracts_cli(session: Session, current_employee: Employee):
         )
     elif filter_choice == "2":
         contracts = list_contracts(
-            session, current_employee, filter_by_signed_status=True
+            session, current_employee, filter_signed=True
         )
         display_contract_table(contracts, "Signed Contracts")
     elif filter_choice == "3":
         contracts = list_contracts(
-            session, current_employee, filter_by_signed_status=False
+            session, current_employee, filter_signed=False
         )
         display_contract_table(contracts, "Unsigned Contracts")
     else:
