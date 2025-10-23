@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from rich.console import Console
 from sqlalchemy.orm import joinedload
 
-from app.models import Contract, Event, Employee
+from app.models import Contract, Event, Employee, Role
 from app.authentication import check_permission
 
 console = Console()
@@ -228,9 +228,10 @@ def update_event(
                 # Check if the new support contact is a valid Support or Gestion employee
                 new_support_contact = (
                     session.query(Employee)
+                    .join(Role)
                     .filter(
                         Employee.id == new_support_id,
-                        Employee.department.in_(["Support", "Gestion"]),
+                        Role.name.in_(["Support", "Gestion"]),
                     )
                     .one_or_none()
                 )
